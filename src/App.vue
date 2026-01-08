@@ -29,7 +29,7 @@
                     <CreateMode v-if="stage.currentStage === 'create'"/>
                     <TemplateMode v-else-if="stage.currentStage === 'template'"/>
                     <EmptyProject v-else/>
-                    <GlobalPalette/>
+                    <!-- <GlobalPalette/> -->
                     <NotificationsTray/>
 
                     <!-- Terminal component -->
