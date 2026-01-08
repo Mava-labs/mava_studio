@@ -22,12 +22,17 @@
 <script setup lang="ts" vapor>
 import { useLayoutStore, type SideNavKey } from '../stores/layout';
 import { useProjectStore } from '../stores/project';
+import { useNotificationStore } from '../stores/notification';
 // import { tooltip } from '../lib/actions/tooltip';
 const layout = useLayoutStore();
 const project = useProjectStore();
+const notifications = useNotificationStore();
 
 function activateSideNavItem(destination: SideNavKey){
-    if(!project.project) return;
+    if(!project.project) {
+        notifications.addNotification('Please open a project to access this feature.', { type: 'warn'});
+        return;
+    }
     layout.setActiveSideNav(destination);
 }
 

@@ -18,6 +18,30 @@ export type ElementType =
 | 'component'
 | 'polygon';
 
+/** Named breakpoint ids for responsive overrides. */
+export type BreakpointId = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+
+/** Minimal override payload applied when a media query matches. */
+type ResponsiveOverride<TStyle> = {
+    /** CSS media query string or shared breakpoint id. */
+    media: BreakpointId | string;
+    /** Position adjustments; undefined keys inherit the base element. */
+    position?: Partial<{ x: number; y: number }>;
+    /** Size adjustments; undefined keys inherit the base element. */
+    size?: { dimensions?: Partial<{ width: number; height: number }>; locked?: boolean };
+    opacity?: number;
+    rotation?: number;
+    visible?: boolean;
+    zIndex?: number;
+    blur?: number;
+    shadow?: Partial<{ color: string; offsetX: number; offsetY: number; blur: number }>;
+    /** Variant specific style overrides (partial to avoid duplication). */
+    style?: Partial<TStyle>;
+};
+
+/** Adds responsive overrides without duplicating full element payload. */
+type WithResponsive<TStyle> = { style: TStyle; responsive?: Array<ResponsiveOverride<TStyle>> };
+
 export type ShapePreset = 
 | 'square'
 | 'circle'
@@ -225,11 +249,11 @@ interface ImageStyle {
  * relative positioning via `parentId`.
  */
 export type Element =
-    | (BaseElement & { type: 'line'; style: LineStyle })
-    | (BaseElement & { type: 'path'; style: PathStyle, commands: PathCommand[] })
-    | (BaseElement & { type: 'rectangle' | 'ellipse' | 'hotspot'; style: ShapeStyle })
-    | (BaseElement & { type: 'polygon'; style: PolygonStyle })
-    | (BaseElement & { type: 'text'; style: TextStyle })
-    | (BaseElement & { type: 'image'; style: ImageStyle })
-    | (BaseElement & { type: 'component'; memberIds: string[], style: ShapeStyle })
-    | (BaseElement & { type: 'collection'; memberIds: string[]; style: ShapeStyle });
+    | (BaseElement & WithResponsive<LineStyle> & { type: 'line' })
+    | (BaseElement & WithResponsive<PathStyle> & { type: 'path'; commands: PathCommand[] })
+    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'rectangle' | 'ellipse' | 'hotspot' })
+    | (BaseElement & WithResponsive<PolygonStyle> & { type: 'polygon' })
+    | (BaseElement & WithResponsive<TextStyle> & { type: 'text' })
+    | (BaseElement & WithResponsive<ImageStyle> & { type: 'image' })
+    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'component'; memberIds: string[] })
+    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'collection'; memberIds: string[] });

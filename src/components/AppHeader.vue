@@ -34,10 +34,10 @@
                     </li>
                 </ul>   
                 <ul class="flex justify-around p-4 w-64">
-                    <li v-for="item in navItems[1]" class="cursor-pointer">
+                    <li v-for="item in navItems[1]" class="">
                         <!-- TODO -->
                         <!-- <button use:tooltip={{ content: item.name, placement: 'bottom' }} type="button" class="flex items-center flex-col space-y-1 cursor-pointer" @click="() => toggleRightUtil(item.name)"> -->
-                        <button type="button" class="flex items-center flex-col space-y-1 cursor-pointer" @click="() => toggleRightUtil(item.name)">
+                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.project ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => toggleRightUtil(item.name)">
                             <svg class="w-6 h-6" :class="item.name.toLowerCase() === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                                 <g v-html="item.icon"></g>
                             </svg>
@@ -146,6 +146,10 @@
     }
 
     function toggleRightUtil(name: string) {
+        if(!project.project) {
+            notification.addNotification('Please create or open a project to use this utility.', { type: 'warn', ttl: 4000 });
+            return;
+        }
         const key = (name.toLowerCase() as RightUtilKey);
         if (layout.activeRightUtil === key) layout.setActiveRightUtil(null);
         else layout.setActiveRightUtil(key);
@@ -159,7 +163,10 @@
     }
 
     function openTerminal(source: 'scripts' | 'timeline') {
-        if(!project.project) return
+        if(!project.project) {
+            notification.addNotification('Please create or open a project to use the terminal.', { type: 'warn', ttl: 4000 });
+            return;
+        }
         layout.openTerminalWithTab(source)
     }
 

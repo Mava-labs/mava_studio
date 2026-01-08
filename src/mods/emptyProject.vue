@@ -99,10 +99,13 @@
 </template>
 
 <script setup lang="ts" vapor>
-import { useStageStore, type StageKey } from '../stores/stage';
+import { basename } from '@tauri-apps/api/path';
+import { open } from '@tauri-apps/plugin-dialog';
+import { useProjectStore } from '../stores/project';
 import { useNotificationStore } from '../stores/notification';
+import { useStageStore } from '../stores/stage';
 
-type QuickActionKey = StageKey | 'open' | 'clone';
+type QuickActionKey = 'create' | 'open' | 'clone';
 
 interface QuickAction {
     key: QuickActionKey;
@@ -124,18 +127,14 @@ interface RecentItem {
     updated: string;
 }
 
-interface ShortcutTip {
-    label: string;
-    keys: string;
-}
-
-const stage = useStageStore();
+const project = useProjectStore();
 const notification = useNotificationStore();
+const stage = useStageStore();
 
 const quickActions: QuickAction[] = [
     {
         key: 'create',
-        title: 'New blank canvas',
+        title: 'New blank project',
         subtitle: 'Start with an empty layout.',
         accent: 'from-sky-500 to-cyan-400',
         icon: '<svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687 1.687a1 1 0 010 1.414l-9.9 9.9a1 1 0 01-.41.25l-3.22.966a.5.5 0 01-.62-.62l.966-3.22a1 1 0 01.25-.41l9.9-9.9a1 1 0 011.414 0z"/></svg>',
@@ -162,19 +161,10 @@ const resources: ResourceLink[] = [
     { title: 'Release notes', copy: 'See what shipped recently.', href: 'https://code.visualstudio.com/updates' },
 ];
 
-const shortcuts: ShortcutTip[] = [
-    { label: 'Open command palette', keys: 'Ctrl + Shift + P' },
-    { label: 'Toggle terminal', keys: 'Ctrl + `' },
-    { label: 'Switch theme', keys: 'Ctrl + K, Ctrl + T' },
-];
 
-function isStage(key: QuickActionKey): key is StageKey {
-    return key === 'empty' || key === 'create' || key === 'template' || key === 'animate';
-}
-
-function handleQuickAction(action: QuickAction) {
-    if (isStage(action.key)) {
-        stage.setStage(action.key);
+async function handleQuickAction(action: QuickAction) {
+    if (action.key === 'create') {
+        await startNewProjectFlow();
         return;
     }
     if (action.key === 'open') {
@@ -182,6 +172,36 @@ function handleQuickAction(action: QuickAction) {
         return;
     }
     notifyComingSoon('Git clone flow will land here.');
+}
+
+async function startNewProjectFlow() {
+    try {
+        const target = await pickProjectDirectory();
+        if (!target) {
+            notification.addNotification('Project creation cancelled.', { type: 'info', ttl: 2500 });
+            return;
+        }
+
+        const projectName = target.name || 'Untitled Project';
+        project.createProject({ name: projectName, path: target.path });
+        await project.persistProjectToDisk(target.path);
+        stage.setStage('create');
+
+        notification.addNotification(`Created ${projectName} at ${target.path}`, { type: 'info', ttl: 4500 });
+    } catch (error) {
+        console.log('Error creating project:', error);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        notification.addNotification(`Failed to create project: ${message}`, { type: 'error', ttl: 6000 });
+    }
+}
+
+async function pickProjectDirectory() {
+    const selection = await open({ directory: true, multiple: false, title: 'Choose a folder for your project' });
+    if (!selection) return null;
+
+    const directory = Array.isArray(selection) ? selection[0] : selection;
+    const name = await basename(directory);
+    return { path: directory, name };
 }
 
 function notifyComingSoon(message: string) {

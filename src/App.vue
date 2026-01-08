@@ -30,6 +30,7 @@
                     <TemplateMode v-else-if="stage.currentStage === 'template'"/>
                     <EmptyProject v-else/>
                     <GlobalPalette/>
+                    <NotificationsTray/>
 
                     <!-- Terminal component -->
                     <div ref="terminalElementRef" id="terminal" class="absolute z-20 bottom-0 left-0 right-0 min-h-0.75 max-h-full resize-y overflow-auto bg-slate-950 border-slate-50 dark:border-slate-800 no-scroll overflow-y-auto" :class="layout.terminalState === 'closed' ? 'border-0' : 'border-t'" :style="{ height: `${layout.terminalState === 'closed' ? 3 : layout.terminalHeight}px` }">
@@ -71,6 +72,7 @@ import AppHeader from './components/AppHeader.vue';
 import SideNav from './components/SideNav.vue';
 import NavAssociates from './components/NavAssociates.vue';
 import RightUtilities from './components/RightUtilities.vue';
+import NotificationsTray from './components/NotificationsTray.vue';
 
 // TODO: Implementation to change to defineAsyncComponent in future when stabilized in vapor mode
 // for lazy loading of modules. Delete direct imports below when lazy loading is supported
