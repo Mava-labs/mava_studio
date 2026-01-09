@@ -29,10 +29,10 @@ const project = useProjectStore();
 const notifications = useNotificationStore();
 
 function activateSideNavItem(destination: SideNavKey){
-    if(!project.project) {
-        notifications.addNotification('Please open a project to access this feature.', { type: 'warn'});
-        return;
-    }
+    // if(!project.project) {
+    //     notifications.addNotification('Please open a project to access this feature.', { type: 'warn'});
+    //     return;
+    // }
     layout.setActiveSideNav(destination);
 }
 
