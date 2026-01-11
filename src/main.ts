@@ -3,6 +3,9 @@ import App from "./App.vue";
 import "./assets/main.css";
 import persistedstate from "pinia-plugin-persistedstate";
 import { createPinia } from "pinia";
+import { prepareTauriStorage } from "./utils/tauriStorage";
+
+await prepareTauriStorage();
 
 const pinia = createPinia();
 pinia.use(persistedstate);

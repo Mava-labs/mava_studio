@@ -7,42 +7,57 @@
 *  - Consider isolation / nesting semantics if it can contain children.
 */
 export type ElementType =
-| 'line'
-| 'rectangle'
 | 'ellipse'
 | 'path'
 | 'text'
 | 'image'
-| 'hotspot'
 | 'collection'
 | 'component'
-| 'polygon';
+| ShapePreset;
+
+export type Positioning =
+  | { mode: 'flow' } // normal document flow (future-proof)
+  | {
+        mode: 'absolute';
+        anchor: 'parent' | 'page';
+        x: number;
+        y: number;
+        zIndex: number;
+    };
+
+
+export interface Layout {
+    positioning: Positioning;
+
+    size: {
+        width: number;
+        height: number;
+        locked?: boolean;
+    };
+
+    transform?: {
+        rotation?: number;
+        scaleX?: number;
+        scaleY?: number;
+    };
+
+    visible?: boolean;
+    locked?: boolean;
+}
+
 
 /** Named breakpoint ids for responsive overrides. */
 export type BreakpointId = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
-/** Minimal override payload applied when a media query matches. */
-type ResponsiveOverride<TStyle> = {
-    /** CSS media query string or shared breakpoint id. */
-    media: BreakpointId | string;
-    /** Position adjustments; undefined keys inherit the base element. */
-    position?: Partial<{ x: number; y: number }>;
-    /** Size adjustments; undefined keys inherit the base element. */
-    size?: { dimensions?: Partial<{ width: number; height: number }>; locked?: boolean };
-    opacity?: number;
-    rotation?: number;
-    visible?: boolean;
-    zIndex?: number;
-    blur?: number;
-    shadow?: Partial<{ color: string; offsetX: number; offsetY: number; blur: number }>;
-    /** Variant specific style overrides (partial to avoid duplication). */
+export type ResponsiveDelta<TStyle> = {
+    breakpoint: BreakpointId;
+    layout?: Partial<Layout>;
     style?: Partial<TStyle>;
 };
 
-/** Adds responsive overrides without duplicating full element payload. */
-type WithResponsive<TStyle> = { style: TStyle; responsive?: Array<ResponsiveOverride<TStyle>> };
-
 export type ShapePreset = 
+| 'line'
+| 'rectangle'
 | 'square'
 | 'circle'
 | 'triangle'
@@ -93,126 +108,116 @@ export type ElementAnimation = {
     loop?: boolean;
 };
 
+export interface Effects {
+    opacity?: number;
+    blur?: number;
+    shadow?: {
+        color: string;
+        offsetX: number;
+        offsetY: number;
+        blur: number;
+    };
+}
+
+
 /**
  * Properties shared by every element variant.
  * Keep this intentionally compact – large optional branches should live in variant style objects.
  */
-interface BaseElement {
-    /** Stable identifier (persisted in history and references). */
+interface BaseElement<TStyle> {
     id: string;
-    /** Human readable name (layers panel, search). */
     name: string;
-    /** Discriminant. */
     type: ElementType;
-    /** Local position relative to parent collection (or stage if root). */
-    position: { x: number; y: number };
-    /** 2D size + optional lock (for uniform scaling / maintaining square). */
-    size: {
-        dimensions:{ width: number; height: number }
-        /** When true editing width automatically updates height (and vice‑versa). */
-        locked?: boolean; // if true, change in one dimension affects the other
+
+    parentId?: string;
+
+    layout: Layout;
+    effects?: Effects;
+    style: TStyle;
+
+    responsive?: ResponsiveDelta<TStyle>[];
+
+    interaction?: {
+        triggers?: ElementTrigger[];
+        animations?: ElementAnimation[];
     };
-    /** Parent collection id if nested. Undefined => root element. */
-    parentId?: string; // collection parent if nested
-    /** Simple drop shadow styling. */
-    shadow: { color: string; offsetX: number; offsetY: number; blur: number };
-    /** Rotation in degrees (clockwise). */
-    rotation: number;
-    /** Opacity 0..1 (mirrors style schema). */
-    opacity: number;
-    /** Blur effect radius (pixels). */
-    blur: number;
-    /** Visibility toggle (hidden elements ignored by selection / snapping). */
-    visible: boolean;
-    /** Interactivity toggle (Locked elements can't be edited or formated but can be selected for inspection) */
-    locked: boolean;
-    /** Rendering (stacking) order – higher = front. */
-    zIndex: number;
-    /** Attaches this element as an instance of a given Component's Id */
-    parentComponentId?: string; // if is instance of a component, the component id
-    /** Cached Tailwind utility string – computed dynamically (see computeElementClasses). */
-    appliedClasses?: string[]; // Tailwind utility classes computed from style
-    // Behaviors / interaction
-    /** Imperative callable methods (future expansion). */
-    methods?: Array<{ name: string; params?: Record<string, unknown> }>; // callable methods
-    /** Event -> actions mapping. */
-    triggers?: ElementTrigger[];
-    /** Optional animation clips bound to this element. */
-    animations?: ElementAnimation[];
 }
+
 
 /** Styling for pure text elements. */
 interface TextStyle {
-    inlineStyle: InlineTextStyle;
-    textDecoration: 'underline' | 'line-through' | 'none';
-    lineHeight: number; // em
-    letterSpacing: number; // em
-    wordSpacing: number; // em
-    
-    whiteSpace: 'normal' | 'nowrap' | 'pre' | 'pre-wrap' | 'pre-line';
-    /** Text shadow effect. */
-    textShadow: { color: string; offsetX: number; offsetY: number; blur: number };
-    /** Text vertical alignment within element box. */
-    verticalAlign: 'top' | 'middle' | 'bottom';
-    /** Vertical placement within containing shape (experimental). */
-    placement: 'top' | 'bottom' | 'middle';
-    /** Optional substring highlight region. */
-    highlight: {
-        color: string;
-        start: number;
-        end: number;
-    }
-    /** Raw textual content. */
     content: string;
-}
 
-interface InlineTextStyle {
-    content: string;
-    fontSize: number;
-    fontFamily?: string;
-    textColor: string;
-    fontStyle: 'italic' | 'normal';
-    textAlign: 'left' | 'center' | 'right';
-    fontWeight: 'normal' | 'bold' | 'black' | 'semibold' | 'medium' | 'light' | number; // number = 100..900
-    textTransform: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+    font: {
+        family?: string;
+        size: number;
+        weight?: number | 'normal' | 'bold';
+        style?: 'normal' | 'italic';
+    };
+
+    transform?: 'Normal' | 'uppercase' | 'lowercase' | 'capitalize';
+    color: string;
+    align?: 'left' | 'center' | 'right';
     lineHeight?: number;
     letterSpacing?: number;
+    whiteSpace?: 'normal' | 'nowrap' | 'pre-wrap';
+
+    decoration?: 'underline' | 'line-through';
 }
 
 /** Shared styling for simple shapes (rect, circle, hotspot, collection container). */
-interface ShapeStyle extends LineStyle {
-    fillColor: string;
-    /** Internal padding (used when shape houses text / children). */
-    padding: {
+interface ShapeStyle {
+    fill?: string;
+    sides: number;
+
+    textContent?: {
+        text: TextStyle
+        placementH: 'left' | 'center' | 'right';
+        placementV: 'top' | 'center' | 'bottom';
+    }
+
+    isArrow?: {
+        start?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
+        end?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
+    }
+
+    stroke?: {
+        color: string;
+        width: number;
+        style?: 'solid' | 'dashed' | 'dotted';
+    };
+
+    radius?: number | {
+        tl: number;
+        tr: number;
+        br: number;
+        bl: number;
+    };
+
+    padding?: number | {
         top: number;
         right: number;
         bottom: number;
         left: number;
     };
-    borderRadius: {
-        dimensions: {
-            topLeft: number;
-            topRight: number;
-            bottomRight: number;
-            bottomLeft: number;
-        }
-        /** When true all corners mirror topLeft value. */
-        locked: boolean; // if true, all corners have same radius
-    };
-    /** Optional embedded text styling. */
-    textContent?: InlineTextStyle;
 }
 
-/** Style subset for straight line elements. */
-interface LineStyle {
+interface ImageStyle {
+    src: string;
+    fit?: 'cover' | 'contain' | 'fill';
+    filters?: {
+        brightness?: number;
+        contrast?: number;
+        grayscale?: number;
+        blur?: number;
+    };
+}
+
+interface PathStyle {
+    fill: string;
     strokeColor: string;
     strokeWidth: number;
     strokeStyle: 'solid' | 'dashed' | 'dotted';
-    start?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
-    end?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
-}
-
-interface PathStyle extends LineStyle {
     closed: boolean;
     smooth: boolean;
 }
@@ -225,23 +230,6 @@ type PathCommand =
     | { type: 'Q'; x1: number; y1: number; x: number; y: number } // Quadratic Bezier
     | { type: 'Z' }; // Close path
 
-interface PolygonStyle extends ShapeStyle {
-    /** The number of sides (system default polygons define their starting values). */
-    sides: number;
-    /** Radius of the polygon (distance from center to vertices). */
-    radius: number;
-}
-
-/** Image specific styling + transformation filters. */
-interface ImageStyle {
-    src: string;
-    alt: string;
-    fit: 'cover' | 'contain' | 'fill';
-    borderRadius: number;
-    opacity: number;
-    filters: { brightness: number; contrast: number; grayscale: number; blur: number };
-}
-
 /**
  * Final discriminated union tying each element `type` to its style payload.
  * Collections carry an additional `memberIds` list (composition) – their children
@@ -249,11 +237,8 @@ interface ImageStyle {
  * relative positioning via `parentId`.
  */
 export type Element =
-    | (BaseElement & WithResponsive<LineStyle> & { type: 'line' })
-    | (BaseElement & WithResponsive<PathStyle> & { type: 'path'; commands: PathCommand[] })
-    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'rectangle' | 'ellipse' | 'hotspot' })
-    | (BaseElement & WithResponsive<PolygonStyle> & { type: 'polygon' })
-    | (BaseElement & WithResponsive<TextStyle> & { type: 'text' })
-    | (BaseElement & WithResponsive<ImageStyle> & { type: 'image' })
-    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'component'; memberIds: string[] })
-    | (BaseElement & WithResponsive<ShapeStyle> & { type: 'collection'; memberIds: string[] });
+    | (BaseElement<PathStyle> & { type: 'path'; commands: PathCommand[] })
+    | (BaseElement<ShapeStyle> & { type: ShapePreset })
+    | (BaseElement<TextStyle> & { type: 'text' })
+    | (BaseElement<ImageStyle> & { type: 'image' })
+    | (BaseElement<{}> & { type: 'container' | 'component'; memberIds: string[] });

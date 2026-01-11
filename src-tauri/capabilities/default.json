@@ -2,27 +2,116 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
     "fs:default",
     "dialog:default",
+    "store:default",
     {
-        "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$APPDATA/*" }]
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "/**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "$APPDATA/*" }]
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "/**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$APPDATA/*" }]
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "/**"
+        }
+      ]
     },
     {
-        "identifier": "dialog:allow-open",
-      "allow": [{ "path": "$APPDATA/*" }]
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "/**"
+        }
+      ]
+    },
+    {
+      "identifier": "dialog:allow-save",
+      "allow": [
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "/**"
+        }
+      ]
+    },
+    {
+      "identifier": "dialog:allow-open",
+      "allow": [
+        {
+          "path": "$APPDATA/*"
+        }
+      ]
     }
   ]
 }

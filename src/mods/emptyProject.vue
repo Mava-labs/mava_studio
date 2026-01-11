@@ -99,9 +99,10 @@
 </template>
 
 <script setup lang="ts" vapor>
-import { basename } from '@tauri-apps/api/path';
-import { open } from '@tauri-apps/plugin-dialog';
-import { useProjectStore } from '../stores/project';
+import { basename, extname } from '@tauri-apps/api/path';
+import { save } from '@tauri-apps/plugin-dialog';
+import { createWorkspaceDir, packMavaArchive } from '../utils/mavaArchive';
+import { useProjectMetadataStore } from '../stores/projectMetadata';
 import { useNotificationStore } from '../stores/notification';
 import { useStageStore } from '../stores/stage';
 
@@ -127,7 +128,7 @@ interface RecentItem {
     updated: string;
 }
 
-const project = useProjectStore();
+const project = useProjectMetadataStore();
 const notification = useNotificationStore();
 const stage = useStageStore();
 
@@ -176,18 +177,25 @@ async function handleQuickAction(action: QuickAction) {
 
 async function startNewProjectFlow() {
     try {
-        const target = await pickProjectDirectory();
+        const target = await pickProjectSaveLocation();
         if (!target) {
             notification.addNotification('Project creation cancelled.', { type: 'info', ttl: 2500 });
             return;
         }
 
         const projectName = target.name || 'Untitled Project';
-        project.createProject({ name: projectName, path: target.path });
-        await project.persistProjectToDisk(target.path);
-        stage.setStage('create');
+        const workspacePath = await createWorkspaceDir();
 
-        notification.addNotification(`Created ${projectName} at ${target.path}`, { type: 'info', ttl: 4500 });
+        project.createProjectAndPersist({ name: projectName, path: workspacePath, archivePath: target.path }).then(async () => {
+            await packMavaArchive(workspacePath, target.path);
+            notification.addNotification(`Project ${projectName} created successfully.`, { type: 'info', ttl: 4000 });
+            stage.setStage('create');
+        }).catch((err) => {
+            console.log('Error during project creation:', err);
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            notification.addNotification(`Failed to create project: ${message}`, { type: 'error', ttl: 6000 });
+        });
+
     } catch (error) {
         console.log('Error creating project:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -195,13 +203,22 @@ async function startNewProjectFlow() {
     }
 }
 
-async function pickProjectDirectory() {
-    const selection = await open({ directory: true, multiple: false, title: 'Choose a folder for your project' });
+async function pickProjectSaveLocation() {
+    const selection = await save({
+        title: 'Choose where to save your project',
+        defaultPath: 'untitled-project.mava',
+        filters: [{ name: 'Mava Studio Project', extensions: ['mava', 'json'] }],
+    });
+
     if (!selection) return null;
 
-    const directory = Array.isArray(selection) ? selection[0] : selection;
-    const name = await basename(directory);
-    return { path: directory, name };
+    const rawName = await basename(selection);
+    const extension = await extname(selection);
+    const name = rawName.endsWith(extension) && extension.length > 0
+        ? rawName.slice(0, -extension.length)
+        : rawName;
+
+    return { path: selection, name };
 }
 
 function notifyComingSoon(message: string) {

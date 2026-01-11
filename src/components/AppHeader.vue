@@ -23,7 +23,7 @@
                     <li v-for="item in navItems[0]">
                         <!-- TODO -->
                         <!-- <button use:tooltip={{ content: item.name, placement: 'bottom' }} type="button" class="flex items-center flex-col space-y-1 cursor-pointer" onclick={() => (item.name === 'Scripts' ? openTerminalWithTab('scripts') : openTerminalWithTab('timeline'))}> -->
-                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.project ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => (item.name === 'Scripts' ? openTerminal('scripts') : openTerminal('timeline'))">
+                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.projectName ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => (item.name === 'Scripts' ? openTerminal('scripts') : openTerminal('timeline'))">
                             <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                                 <g v-html="item.icon"></g>
                             </svg>
@@ -37,7 +37,7 @@
                     <li v-for="item in navItems[1]" class="">
                         <!-- TODO -->
                         <!-- <button use:tooltip={{ content: item.name, placement: 'bottom' }} type="button" class="flex items-center flex-col space-y-1 cursor-pointer" @click="() => toggleRightUtil(item.name)"> -->
-                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.project ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => toggleRightUtil(item.name)">
+                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.projectName ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => toggleRightUtil(item.name)">
                             <svg class="w-6 h-6" :class="item.name.toLowerCase() === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                                 <g v-html="item.icon"></g>
                             </svg>
@@ -91,14 +91,14 @@
     import { useLayoutStore, RightUtilKey } from '../stores/layout';
     import { useStageStore, type StageKey } from '../stores/stage';
     import { useNotificationStore } from '../stores/notification';
-    import { useProjectStore } from '../stores/project';
+    import { useProjectMetadataStore } from '../stores/projectMetadata';
     // import { tooltip } from './lib/actions/tooltip';
     // import { publishProject } from './lib/publish';
     
     const layout = useLayoutStore();
     const notification = useNotificationStore();
     const stage = useStageStore();
-    const project = useProjectStore();
+    const project = useProjectMetadataStore();
 
     async function handleFileNav(name: string) {
         if (name === 'Publish') {
@@ -146,7 +146,7 @@
     }
 
     function toggleRightUtil(name: string) {
-        if(!project.project) {
+        if(!project.projectName) {
             notification.addNotification('Please create or open a project to use this utility.', { type: 'warn', ttl: 4000 });
             return;
         }
@@ -163,7 +163,7 @@
     }
 
     function openTerminal(source: 'scripts' | 'timeline') {
-        if(!project.project) {
+        if(!project.projectName) {
             notification.addNotification('Please create or open a project to use the terminal.', { type: 'warn', ttl: 4000 });
             return;
         }

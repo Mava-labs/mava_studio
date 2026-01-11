@@ -3,22 +3,22 @@ import type { Element } from './element';
 // Project data schema version (increment on breaking structural changes)
 export const CURRENT_PROJECT_VERSION = 1 as const;
 
-interface LayoutProps {
-    stageSize: { width: number; height: number };
-    elementProps: Record<string, { position: { x: number; y: number }; size: { width: number; height: number } }>;
-}
-
 export type Page = {
     id: string;
     visible: boolean;
-    elements: Element[];
-    backgroundColor: string;
-    layouts: Record<'desktop' | 'tablet' | 'mobile', LayoutProps>;
+
+    stage: {
+        width: number;
+        height: number;
+        background: string;
+    };
+
+    elements: Record<string, Element>;
+
     metadata: {
         title: string;
-        duration: number; // minutes estimate
         description?: string;
-        url?: string;
+        duration?: number;
         version: number;
         createdAt: number;
         updatedAt: number;
@@ -26,11 +26,9 @@ export type Page = {
             userId: string;
             name: string;
         };
-        // Optional extras
-        tags?: string[];
-        thumbnailUrl?: string;
     };
 };
+
 
 export interface DSLTriggerDocument {
     id: string;
@@ -63,6 +61,7 @@ export type Lesson = {
     type: "activity" | "assessment";
     visible: boolean;
     pages: {
+        name: string;
         id: string;       // page id
         order: number;    // position in the lesson (1-based)
     }[];
@@ -93,6 +92,7 @@ export type Module = {
     id: string;
     visible: boolean;
     lessons: {
+        name: string;
         id: string;
         order: number;
     }[];
@@ -123,6 +123,7 @@ export type Module = {
 export type Course = {
     id: string;
     modules: {
+        name: string;
         id: string;
         order: number;
     }[];
@@ -165,6 +166,7 @@ export type ProjectData = {
     projectId: string;
     projectName: string;
     projectPath?: string; // optional filesystem path
+    projectArchivePath?: string | null; // optional .mava archive file path
     createdAt: number;
     updatedAt: number;
     authors: Author[];

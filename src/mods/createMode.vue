@@ -1,20 +1,18 @@
 <template>
     <div class="h-full w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
         <div class="border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80">
-            <div class="flex items-center gap-1 px-3 py-2 overflow-x-auto thin-scroll">
-                <div class="text-[11px] uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 pr-2">Open Pages</div>
-                <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 overflow-x-auto thin-scroll">
+                <div class="flex items-center ">
                     <button
                         v-for="tab in openPageTabs"
-                        :key="tab.pageId"
+                        :key="tab.id"
                         type="button"
-                        class="group relative flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition"
-                        :class="tab.pageId === activePageId ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-50 shadow-inner' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'"
-                        @click="activateTab(tab.pageId)"
+                        class="group relative bg-slate-800 flex items-center gap-2 px-3 py-2.5 text-sm transition border-r border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600"
+                        :class="tab.id === activePageId ? 'bg-transparent text-slate-900 dark:text-slate-50 shadow-inner' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'"
+                        @click="activateTab(tab.id)"
                     >
-                        <span class="truncate max-w-48">{{ tab.pageTitle || 'Untitled page' }}</span>
-                        <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-32">{{ tab.lessonTitle }}</span>
-                        <span v-if="tab.pageId === activePageId" class="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full" />
+                        <span class="truncate max-w-48">{{ tab.title }}</span>
+                        <span v-if="tab.id === activePageId" class="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
                     </button>
                     <div v-if="openPageTabs.length === 0" class="text-xs text-slate-500 dark:text-slate-400 px-2 py-1">No open pages.</div>
                 </div>
@@ -69,55 +67,30 @@
 
 <script setup lang="ts" vapor>
 import { computed } from "vue";
-import { useProjectStore } from "../stores/project";
-import type { Page, ProjectData } from "../types/project";
+import { usePagesStore } from "../stores/pages";
+import type { Page } from "../types/project";
 
-const project = useProjectStore();
+const pages = usePagesStore();
 
-const openPageTabs = computed(() => project.openPages || []);
+const openPageTabs = computed(() =>
+    Object.values(pages.pagesCache).map((page) => ({
+        id: page.id,
+        title: page.metadata.title || "Untitled page",
+    }))
+);
 
-const activePageId = computed(() => project.activePath?.pageId || null);
+const activePageId = computed(() => pages.activePageId);
 
-const activePage = computed<Page | null>(() => {
-    const data = project.project;
-    const path = project.activePath;
-    if (!data || !path) return null;
-    return data.pagesById[path.pageId] || null;
-});
+const activePage = computed<Page | null>(() => pages.getActivePageData());
 
 const stageSize = computed(() => {
-    const layout = activePage.value?.layouts?.desktop;
-    return layout?.stageSize || { width: 1280, height: 720 };
+    const stage = activePage.value?.stage;
+    return stage ? { width: stage.width, height: stage.height } : { width: 1280, height: 720 };
 });
 
-const elementCount = computed(() => activePage.value?.elements?.length || 0);
+const elementCount = computed(() => activePage.value ? Object.keys(activePage.value.elements || {}).length : 0);
 
 function activateTab(pageId: string) {
-    const data = project.project;
-    if (!data) return;
-    const path = resolvePathForPage(data, pageId);
-    if (path) project.activePath = path;
-}
-
-function resolvePathForPage(data: ProjectData, pageId: string) {
-    let lessonId: string | null = null;
-    for (const [id, lesson] of Object.entries(data.lessonsById)) {
-        if (lesson.pages.some((p) => p.id === pageId)) {
-            lessonId = id;
-            break;
-        }
-    }
-    if (!lessonId) return null;
-
-    let moduleId: string | null = null;
-    for (const [id, module] of Object.entries(data.modulesById)) {
-        if (module.lessons.some((l) => l.id === lessonId)) {
-            moduleId = id;
-            break;
-        }
-    }
-    if (!moduleId) return null;
-
-    return { moduleId, lessonId, pageId };
+    pages.loadPage(pageId);
 }
 </script>

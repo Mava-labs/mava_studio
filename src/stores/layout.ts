@@ -1,18 +1,21 @@
 import { defineStore } from "pinia";
 import { Ref, ref } from "vue";
+import { tauriStorage } from "../utils/tauriStorage";
 
 function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
 
 export const useLayoutStore = defineStore("layout", () =>{
-    let activeSideNav: Ref<SideNavKey | null> = ref(null);
-    let activeRightUtil: Ref<RightUtilKey | null> = ref(null);
+    const activeSideNav: Ref<SideNavKey | null> = ref(null);
+    const activeRightUtil: Ref<RightUtilKey | null> = ref(null);
     const asideWidth: Ref<number> = ref(clamp(250, 150, 400));
     const terminalHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
     const terminalState: Ref<TerminalState> = ref("closed");
     const terminalPrevHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
     const terminalTab: Ref<TerminalTab> = ref("scripts");
+    const outlineExpaded: Ref<boolean> = ref(true);
+    const explorerOpen: Ref<boolean> = ref(true);
 
     function setActiveSideNav(key: SideNavKey | null) {
         if (activeSideNav.value === key) {
@@ -114,14 +117,36 @@ export const useLayoutStore = defineStore("layout", () =>{
         openTerminal();
     }
 
+    function toggleOutlineOrExplorer(target: 'outline' | 'explorer') {
+        if (target === 'outline') {
+            outlineExpaded.value = !outlineExpaded.value;
+        } else if (target === 'explorer') {
+            explorerOpen.value = !explorerOpen.value;
+        }
+    }
     
     return { 
         activeSideNav, setActiveSideNav, activeRightUtil, setActiveRightUtil, 
-        asideWidth, setAsideWidth, terminalHeight, setTerminalHeight, 
+        asideWidth, setAsideWidth, terminalHeight, setTerminalHeight,  toggleOutlineOrExplorer,
         terminalState, setTerminalState, toggleFull, openTerminal, closeTerminal, 
-        terminalTab, setTerminalTab, openTerminalWithTab
+        terminalTab, setTerminalTab, openTerminalWithTab, outlineExpaded, explorerOpen
     }
-})
+}, {
+    persist: {
+        storage: tauriStorage as any,
+        pick: [
+            'explorerOpen',
+            'outlineExpaded',
+            'activeSideNav', 
+            'activeRightUtil', 
+            'asideWidth', 
+            'terminalHeight', 
+            'terminalState', 
+            'terminalPrevHeight', 
+            'terminalTab'
+        ]
+    }
+});
 
 export type SideNavKey =
     | "structure"
