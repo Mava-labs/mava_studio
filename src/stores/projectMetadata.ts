@@ -6,6 +6,12 @@ import { tauriStorage } from "../utils/tauriStorage";
 import { join } from "@tauri-apps/api/path";
 import { ensureDir, writeJSON } from "../utils/diskIO";
 
+const DEFAULT_STAGE = {
+    width: 1280,
+    height: 720,
+    background: "#ffffff",
+};
+
 export const useProjectMetadataStore = defineStore(
     "projectMetadata",
     () => {
@@ -152,9 +158,9 @@ export const useProjectMetadataStore = defineStore(
                 visible: true,
                 elements: {},
                 stage: {
-                    width: 0,
-                    height: 0,
-                    background: "#ffffff" ,
+                    width: DEFAULT_STAGE.width,
+                    height: DEFAULT_STAGE.height,
+                    background: DEFAULT_STAGE.background,
                 },
                 metadata: {
                     title: "Page 1",

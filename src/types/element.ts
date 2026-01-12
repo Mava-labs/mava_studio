@@ -7,12 +7,12 @@
 *  - Consider isolation / nesting semantics if it can contain children.
 */
 export type ElementType =
-| 'ellipse'
 | 'path'
 | 'text'
 | 'image'
 | 'collection'
 | 'component'
+| 'container'
 | ShapePreset;
 
 export type Positioning =
@@ -60,10 +60,12 @@ export type ShapePreset =
 | 'rectangle'
 | 'square'
 | 'circle'
+| 'ellipse'
 | 'triangle'
 | 'hexagon'
 | 'star'
 | 'arrow'
+| 'hotspot'
 
 
 /** Standard easing keywords for animation timelines. */
@@ -132,7 +134,7 @@ interface BaseElement<TStyle> {
     parentId?: string;
 
     layout: Layout;
-    effects?: Effects;
+    effects: Effects;
     style: TStyle;
 
     responsive?: ResponsiveDelta<TStyle>[];
@@ -185,6 +187,12 @@ interface ShapeStyle {
         color: string;
         width: number;
         style?: 'solid' | 'dashed' | 'dotted';
+        sides: {
+            top: boolean;
+            right: boolean;
+            bottom: boolean;
+            left: boolean;
+        }
     };
 
     radius?: number | {
@@ -215,9 +223,11 @@ interface ImageStyle {
 
 interface PathStyle {
     fill: string;
-    strokeColor: string;
-    strokeWidth: number;
-    strokeStyle: 'solid' | 'dashed' | 'dotted';
+    stroke: {
+        color: string;
+        width: number;
+        style?: 'solid' | 'dashed' | 'dotted';
+    }
     closed: boolean;
     smooth: boolean;
 }
@@ -239,6 +249,7 @@ type PathCommand =
 export type Element =
     | (BaseElement<PathStyle> & { type: 'path'; commands: PathCommand[] })
     | (BaseElement<ShapeStyle> & { type: ShapePreset })
+    | (BaseElement<ShapeStyle> & { type: 'collection'; memberIds: string[] })
     | (BaseElement<TextStyle> & { type: 'text' })
     | (BaseElement<ImageStyle> & { type: 'image' })
     | (BaseElement<{}> & { type: 'container' | 'component'; memberIds: string[] });

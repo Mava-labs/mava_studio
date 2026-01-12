@@ -105,6 +105,7 @@ import { createWorkspaceDir, packMavaArchive } from '../utils/mavaArchive';
 import { useProjectMetadataStore } from '../stores/projectMetadata';
 import { useNotificationStore } from '../stores/notification';
 import { useStageStore } from '../stores/stage';
+import { usePagesStore } from '../stores/pages';
 
 type QuickActionKey = 'create' | 'open' | 'clone';
 
@@ -131,6 +132,7 @@ interface RecentItem {
 const project = useProjectMetadataStore();
 const notification = useNotificationStore();
 const stage = useStageStore();
+const pages = usePagesStore();
 
 const quickActions: QuickAction[] = [
     {
@@ -186,15 +188,22 @@ async function startNewProjectFlow() {
         const projectName = target.name || 'Untitled Project';
         const workspacePath = await createWorkspaceDir();
 
-        project.createProjectAndPersist({ name: projectName, path: workspacePath, archivePath: target.path }).then(async () => {
+        const result = await project.createProjectAndPersist({ name: projectName, path: workspacePath, archivePath: target.path });
+
+        const loadResult = await pages.loadPage(result.newPageId);
+        if (loadResult === 'Error') {
+            notification.addNotification('Project created, but failed to open the first page.', { type: 'warn', ttl: 5000 });
+        }
+
+        stage.setStage('create');
+        notification.addNotification(`Project ${projectName} created successfully.`, { type: 'info', ttl: 4000 });
+
+        try {
             await packMavaArchive(workspacePath, target.path);
-            notification.addNotification(`Project ${projectName} created successfully.`, { type: 'info', ttl: 4000 });
-            stage.setStage('create');
-        }).catch((err) => {
-            console.log('Error during project creation:', err);
-            const message = err instanceof Error ? err.message : 'Unknown error';
-            notification.addNotification(`Failed to create project: ${message}`, { type: 'error', ttl: 6000 });
-        });
+        } catch (packErr: any) {
+            console.log('Error while archiving project:', packErr);
+            notification.addNotification('Project saved locally, but archiving failed.', { type: 'warn', ttl: 6000 });
+        }
 
     } catch (error) {
         console.log('Error creating project:', error);
