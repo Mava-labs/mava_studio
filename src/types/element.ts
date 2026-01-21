@@ -1,3 +1,5 @@
+import { FlexDisplay, GridDisplay } from "./project";
+
 /**
  * Discriminated union of all element kinds that can appear on a page / inside a collection.
 *
@@ -132,7 +134,7 @@ interface BaseElement<TStyle> {
     type: ElementType;
 
     parentId?: string;
-
+    children?: string[];
     layout: Layout;
     effects: Effects;
     style: TStyle;
@@ -164,7 +166,7 @@ interface TextStyle {
     letterSpacing?: number;
     whiteSpace?: 'normal' | 'nowrap' | 'pre-wrap';
 
-    decoration?: 'underline' | 'line-through';
+    decoration: 'underline' | 'line-through' | 'none';
 }
 
 /** Shared styling for simple shapes (rect, circle, hotspot, collection container). */
@@ -252,4 +254,4 @@ export type Element =
     | (BaseElement<ShapeStyle> & { type: 'collection'; memberIds: string[] })
     | (BaseElement<TextStyle> & { type: 'text' })
     | (BaseElement<ImageStyle> & { type: 'image' })
-    | (BaseElement<{}> & { type: 'container' | 'component'; memberIds: string[] });
+    | (BaseElement<{}> & { type: 'container' | 'component'; memberIds: string[], display: GridDisplay | FlexDisplay });

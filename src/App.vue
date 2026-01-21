@@ -25,7 +25,7 @@
 
                 </nav>
 
-                <section class="h-full min-h-0 overflow-auto relative">
+                <section class="h-full min-h-0 overflow-hidden relative">
                     <CreateMode v-if="stage.currentStage === 'create'"/>
                     <TemplateMode v-else-if="stage.currentStage === 'template'"/>
                     <EmptyProject v-else/>

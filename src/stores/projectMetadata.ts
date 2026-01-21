@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { generateId } from "../utils/id";
 import type { Author, Course, Lesson, Module, Page, ProjectData } from "../types/project";
+import type { Element } from "../types/element";
 import { tauriStorage } from "../utils/tauriStorage";
 import { join } from "@tauri-apps/api/path";
 import { ensureDir, writeJSON } from "../utils/diskIO";
@@ -9,7 +10,7 @@ import { ensureDir, writeJSON } from "../utils/diskIO";
 const DEFAULT_STAGE = {
     width: 1280,
     height: 720,
-    background: "#ffffff",
+    background: "#1d293d",
 };
 
 export const useProjectMetadataStore = defineStore(
@@ -69,6 +70,7 @@ export const useProjectMetadataStore = defineStore(
             const newModuleId = generateId("module");
             const newLessonId = generateId("lesson");
             const newPageId = generateId("page");
+            const newElementId = generateId("el");
 
             // ----------------------------
             // Directories
@@ -153,14 +155,40 @@ export const useProjectMetadataStore = defineStore(
             // ----------------------------
             // Page
             // ----------------------------
+            const mockTextElement: Element = {
+                id: newElementId,
+                name: "Welcome Text",
+                type: "text",
+                children: [],
+                layout: {
+                    positioning: {
+                        mode: "flow"
+                    },
+                    size: { width: 520, height: 120 },
+                    visible: true,
+                },
+                effects: { opacity: 1 },
+                style: {
+                    content: "Double-click to edit me",
+                    font: { size: 28, weight: "bold", family: "Inter, sans-serif" },
+                    transform: "Normal",
+                    color: "#ffffff",
+                    align: "left",
+                    lineHeight: 34,
+                    decoration: "none",
+                },
+            };
+
             const page: Page = {
                 id: newPageId,
                 visible: true,
-                elements: {},
+                elements: { [newElementId]: mockTextElement },
+                roots: [newElementId],
                 stage: {
                     width: DEFAULT_STAGE.width,
                     height: DEFAULT_STAGE.height,
                     background: DEFAULT_STAGE.background,
+                    display: { columns: 1, rows: 3, gap: 0 },
                 },
                 metadata: {
                     title: "Page 1",

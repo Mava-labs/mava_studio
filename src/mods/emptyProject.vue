@@ -194,7 +194,6 @@ async function startNewProjectFlow() {
         if (loadResult === 'Error') {
             notification.addNotification('Project created, but failed to open the first page.', { type: 'warn', ttl: 5000 });
         }
-
         stage.setStage('create');
         notification.addNotification(`Project ${projectName} created successfully.`, { type: 'info', ttl: 4000 });
 

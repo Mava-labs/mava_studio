@@ -50,22 +50,20 @@ const elementTypes: { type: ElementType; label: string; hint?: string }[] = [
 ];
 
 async function addElement(type: ElementType) {
-  if (isWorking.value) return;
-  if (!pages.activePageId) {
-    notifications.addNotification('Pick a page first, then add elements.', { type: 'warn', ttl: 3500 });
-    return;
-  }
+    if (isWorking.value) return;
+    if (!pages.activePageId) {
+        notifications.addNotification('Pick a page first, then add elements.', { type: 'warn', ttl: 3500 });
+        return;
+    }
 
-  isWorking.value = true;
-  try {
-    const created = await pages.insertElement(type);
-    if (!created) return;
-    notifications.addNotification(`${created.name} added to the page.`, { type: 'info', ttl: 2000 });
-  } catch (error) {
-    console.error(error);
-    notifications.addNotification('Could not add the element.', { type: 'error', ttl: 5000 });
-  } finally {
-    isWorking.value = false;
-  }
+    isWorking.value = true;
+    try {
+        // TODO
+    } catch (error) {
+        console.error(error);
+        notifications.addNotification('Could not add the element.', { type: 'error', ttl: 5000 });
+    } finally {
+        isWorking.value = false;
+    }
 }
 </script>

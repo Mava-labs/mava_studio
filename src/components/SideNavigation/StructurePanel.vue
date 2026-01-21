@@ -7,11 +7,13 @@ import type { OutlineNode } from "./Structure/outlineTypes";
 import { useProjectMetadataStore } from "../../stores/projectMetadata";
 import { usePagesStore } from "../../stores/pages";
 import { useLayoutStore } from "../../stores/layout";
+import { useElementStore } from "../../stores/element";
 import type { Element } from "../../types/element";
 
 const project = useProjectMetadataStore();
 const pages = usePagesStore();
 const layout = useLayoutStore();
+const elements = useElementStore()
 
 const treeNodes = ref<ExplorerNode[]>([]);
 watch(
@@ -71,7 +73,7 @@ function handleSelect(node: ExplorerNode) {
     const path = node.meta;
     if (!path?.moduleId || !path.lessonId || !path.pageId) return;
 
-    pages.loadPage(path.pageId);
+    pages.loadPage(path.pageId)
 }
 </script>
 

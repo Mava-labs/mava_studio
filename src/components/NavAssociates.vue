@@ -30,8 +30,8 @@
 </template>
 
 <script setup lang="ts" vapor>
-import ElementsPanel from './SideNavigation/ElementsPanel.vue';
 import StructurePanel from './SideNavigation/StructurePanel.vue';
+import ElementsPanel from './SideNavigation/ElementsPanel.vue';
 import { useLayoutStore } from '../stores/layout';
 
 const layout = useLayoutStore();

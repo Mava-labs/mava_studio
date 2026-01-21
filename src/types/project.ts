@@ -2,6 +2,17 @@ import type { Element } from './element';
 
 // Project data schema version (increment on breaking structural changes)
 export const CURRENT_PROJECT_VERSION = 1 as const;
+export type GridDisplay = {
+    columns: number,
+    rows: number,
+    gap: number
+}
+
+export type FlexDisplay = {
+    grow: number,
+    row: boolean,
+    spacing: 'space-between' | 'evenly-spaced' | 'start' | 'end'
+}
 
 export type Page = {
     id: string;
@@ -11,9 +22,11 @@ export type Page = {
         width: number;
         height: number;
         background: string;
+        display: GridDisplay | FlexDisplay
     };
 
     elements: Record<string, Element>;
+    roots: string[]
 
     metadata: {
         title: string;
@@ -28,7 +41,6 @@ export type Page = {
         };
     };
 };
-
 
 export interface DSLTriggerDocument {
     id: string;
