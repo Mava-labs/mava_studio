@@ -157,7 +157,7 @@ export type SideNavKey =
     | "inspector"
     | "animations";
 
-export type RightUtilKey = "styles" | "actions";
+export type RightUtilKey = "styles" | "props" | "actions";
 
 export type TerminalState = "full" | "normal" | "closed";
 export type TerminalTab = "scripts" | "triggers" | "timeline" | "output";

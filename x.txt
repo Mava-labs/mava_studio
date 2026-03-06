@@ -1,2 +1,11 @@
-*OKUSHABA*
-Ayi Mukama, otwegyese kushaba. Shabira omuriitwe nan'Omwoyo waawe Orikwera. Leka emitima yaitu eijuzibwe okwetenga Kwe kw’amaani, n’eminwa yaitu ebe ekikoreso eki araarabiremu kufuna obugambiro. AMIINA.
+We are grouping elements into;
+1. Shapes(tensils): This includes anything not standard HTML Element, from rectangle to ellipse,
+2. HTML Elements: This includes standard HTML elements that support semantics of HTML 5, that is Section, aside, lists, e.t.c
+3. Layouts: Now this caters forbase layoutof the app nont yet sure of how to present it but it's nore like a displaye present. If i was to build this project forexample, it would be what App.vue is
+
+The primary purpose of layout, is to provide a grid appearance of someones project. We will need to discusshow to prent this for better UI/UX
+
+So, each of these builds back from the Element type, so we need to architect in a way that is connects to markup buildng process
+Then now the UI/UX of editing properties specific to certain HTML tags, and also how to cater for a flexible data model specific to them, forexample, list, whether to be ordered or unordered, input, whether to be, text, number, password, ...
+Then, we need to standardise the Collection type, it should identify elements that can't be pulled apart, unless reset from being a collection or part of a given collection. Elements like a form list and it's memebers must be a collection by default. Moving(draagging), moves it's members since they are locked together
+Another hack of the tday is to start thinking about Components nav Item(see in SideNav.vue) which carries components, comonents in this case being treated as say, vue components. What to take care of, the UI/UX, where to edit them from(createStage or they need a separate place)how they are included into main workflow

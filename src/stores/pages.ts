@@ -8,12 +8,17 @@ import { useNotificationStore } from "./notification";
 import type { Element, ElementType } from "../types/element";
 import { generateId } from "../utils/id";
 
+/** Default stage values when a page omits sizing or background. */
 const DEFAULT_STAGE = {
     width: 1280,
     height: 720,
     background: "#ff0000",
 };
 
+/**
+ * Pages store manages loading, caching, and persisting page documents.
+ * Keeps only currently-loaded pages in memory and surfaces convenience accessors.
+ */
 export const usePagesStore = defineStore("pages", () => {
     // currently loaded pages only
     const pagesCache = ref<Record<string, Page>>({});
@@ -21,6 +26,7 @@ export const usePagesStore = defineStore("pages", () => {
     const projectStore = useProjectMetadataStore();
     const notification = useNotificationStore();
 
+    /** Ensure every page has a valid stage object with sane defaults. */
     const normalizeStage = (stage?: Page["stage"]) => ({
         width: stage?.width && stage.width > 0 ? stage.width : DEFAULT_STAGE.width,
         height: stage?.height && stage.height > 0 ? stage.height : DEFAULT_STAGE.height,
@@ -32,18 +38,21 @@ export const usePagesStore = defineStore("pages", () => {
         }
     });
 
+    /** Return a page with normalized stage and initialized element map. */
     const withDefaults = (page: Page): Page => ({
         ...page,
         stage: normalizeStage(page.stage),
         elements: page.elements ?? {},
     });
 
+    /** Convenience accessor for the active page element by id. */
     const getElementById = (elementId: string): Element | null => {
         if (!activePageId.value) return null;
         const element = pagesCache.value[activePageId.value]?.elements[elementId] || null;
         return element;
     };
 
+    /** Return the currently active page (if loaded). */
     const getActivePageData = () => {
         if (activePageId.value && pagesCache.value[activePageId.value]) {
             return pagesCache.value[activePageId.value];
@@ -51,6 +60,7 @@ export const usePagesStore = defineStore("pages", () => {
         return null;
     };
 
+    /** Load a page from disk into the cache and set it active. */
     async function loadPage(pageId: string): Promise<'Ok' | 'Error'> {
         if (pagesCache.value[pageId]) {
             activePageId.value = pageId;
@@ -77,6 +87,7 @@ export const usePagesStore = defineStore("pages", () => {
         return 'Ok';
     }
 
+    /** Persist a page to disk and refresh the cache entry. */
     async function savePage(page: Page) {
         if (!projectStore.projectPath) throw new Error("Project path not set");
 
@@ -91,6 +102,7 @@ export const usePagesStore = defineStore("pages", () => {
         pagesCache.value[hydrated.id] = hydrated;
     }
 
+    /** Remove a page from the in-memory cache. */
     function unloadPage(pageId: string) {
         delete pagesCache.value[pageId];
     }

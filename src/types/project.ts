@@ -26,7 +26,7 @@ export type Page = {
     };
 
     elements: Record<string, Element>;
-    roots: string[]
+    rootIds: string[]
 
     metadata: {
         title: string;

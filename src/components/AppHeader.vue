@@ -33,15 +33,15 @@
                         </button>
                     </li>
                 </ul>   
-                <ul class="flex justify-around p-4 w-64">
+                <ul class="flex justify-around p-4 w-72">
                     <li v-for="item in navItems[1]" class="">
                         <!-- TODO -->
                         <!-- <button use:tooltip={{ content: item.name, placement: 'bottom' }} type="button" class="flex items-center flex-col space-y-1 cursor-pointer" @click="() => toggleRightUtil(item.name)"> -->
-                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.projectName ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => toggleRightUtil(item.name)">
-                            <svg class="w-6 h-6" :class="item.name.toLowerCase() === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                        <button type="button" class="flex items-center flex-col space-y-1" :class="project.projectName ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'" @click="() => toggleRightUtil(item)">
+                            <svg class="w-6 h-6" :class="(item.key ?? item.name.toLowerCase()) === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                                 <g v-html="item.icon"></g>
                             </svg>
-                            <span class="text-xs" :class="item.name.toLowerCase() === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'">
+                            <span class="text-xs" :class="(item.key ?? item.name.toLowerCase()) === layout.activeRightUtil ? 'text-gray-900 dark:text-white' : 'text-gray-500'">
                                 {{item.name}}
                             </span>
                         </button>
@@ -122,14 +122,15 @@
         { name: 'Publish', icon: `<svg class="w-6 h-6 text-gray-800 dark:text-white" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m226-559 78 33q14-28 29-54t33-52l-56-11-84 84Zm142 83 114 113q42-16 90-49t90-75q70-70 109.5-155.5T806-800q-72-5-158 34.5T492-656q-42 42-75 90t-49 90Zm178-65q-23-23-23-56.5t23-56.5q23-23 57-23t57 23q23 23 23 56.5T660-541q-23 23-57 23t-57-23Zm19 321 84-84-11-56q-26 18-52 32.5T532-299l33 79Zm313-653q19 121-23.5 235.5T708-419l20 99q4 20-2 39t-20 33L538-80l-84-197-171-171-197-84 167-168q14-14 33.5-20t39.5-2l99 20q104-104 218-147t235-24ZM157-321q35-35 85.5-35.5T328-322q35 35 34.5 85.5T327-151q-25 25-83.5 43T82-76q14-103 32-161.5t43-83.5Zm57 56q-10 10-20 36.5T180-175q27-4 53.5-13.5T270-208q12-12 13-29t-11-29q-12-12-29-11.5T214-265Z"/></svg>`},
     ]
 
-    let navItems: {name: string, icon: string}[][] = [
+    let navItems: {name: string, icon: string, key?: RightUtilKey}[][] = [
         [
             { name: 'Scripts', icon: `<svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m8 8-4 4 4 4m8 0 4-4-4-4m-2-3-4 14"/></svg>`},
             { name: 'Timeline', icon: `<svg class="w-6 h-6 text-gray-800 dark:text-white" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M610-760q-21 0-35.5-14.5T560-810q0-21 14.5-35.5T610-860q21 0 35.5 14.5T660-810q0 21-14.5 35.5T610-760Zm0 660q-21 0-35.5-14.5T560-150q0-21 14.5-35.5T610-200q21 0 35.5 14.5T660-150q0 21-14.5 35.5T610-100Zm160-520q-21 0-35.5-14.5T720-670q0-21 14.5-35.5T770-720q21 0 35.5 14.5T820-670q0 21-14.5 35.5T770-620Zm0 380q-21 0-35.5-14.5T720-290q0-21 14.5-35.5T770-340q21 0 35.5 14.5T820-290q0 21-14.5 35.5T770-240Zm60-190q-21 0-35.5-14.5T780-480q0-21 14.5-35.5T830-530q21 0 35.5 14.5T880-480q0 21-14.5 35.5T830-430ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880v80q-134 0-227 93t-93 227q0 134 93 227t227 93v80Zm132-212L440-464v-216h80v184l148 148-56 56Z"/></svg>`},
         ],
         [
-            { name: 'Styles', icon: `<svg class="w-6 h-6 " aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7h.01m3.486 1.513h.01m-6.978 0h.01M6.99 12H7m9 4h2.706a1.957 1.957 0 0 0 1.883-1.325A9 9 0 1 0 3.043 12.89 9.1 9.1 0 0 0 8.2 20.1a8.62 8.62 0 0 0 3.769.9 2.013 2.013 0 0 0 2.03-2v-.857A2.036 2.036 0 0 1 16 16Z"/></svg>`},
-            { name: 'Actions', icon: `<svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><g><rect fill="none" height="24" width="24"/></g><g><path d="M11,21h-1l1-7H7.5c-0.88,0-0.33-0.75-0.31-0.78C8.48,10.94,10.42,7.54,13.01,3h1l-1,7h3.51c0.4,0,0.62,0.19,0.4,0.66 C12.97,17.55,11,21,11,21z"/></g></svg>`},
+            { name: 'Styles', key: 'styles', icon: `<svg class="w-6 h-6 " aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7h.01m3.486 1.513h.01m-6.978 0h.01M6.99 12H7m9 4h2.706a1.957 1.957 0 0 0 1.883-1.325A9 9 0 1 0 3.043 12.89 9.1 9.1 0 0 0 8.2 20.1a8.62 8.62 0 0 0 3.769.9 2.013 2.013 0 0 0 2.03-2v-.857A2.036 2.036 0 0 1 16 16Z"/></svg>`},
+            { name: 'Properties', key: 'props', icon: `<svg class="w-6 h-6" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M6 12h7m-7 5h10"/></svg>`},
+            { name: 'Actions', key: 'actions', icon: `<svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><g><rect fill="none" height="24" width="24"/></g><g><path d="M11,21h-1l1-7H7.5c-0.88,0-0.33-0.75-0.31-0.78C8.48,10.94,10.42,7.54,13.01,3h1l-1,7h3.51c0.4,0,0.62,0.19,0.4,0.66 C12.97,17.55,11,21,11,21z"/></g></svg>`},
         ]
     ]
 
@@ -145,12 +146,12 @@
         }
     }
 
-    function toggleRightUtil(name: string) {
+    function toggleRightUtil(item: { name: string; key?: RightUtilKey }) {
         if(!project.projectName) {
             notification.addNotification('Please create or open a project to use this utility.', { type: 'warn', ttl: 4000 });
             return;
         }
-        const key = (name.toLowerCase() as RightUtilKey);
+        const key = (item.key ?? item.name.toLowerCase()) as RightUtilKey;
         if (layout.activeRightUtil === key) layout.setActiveRightUtil(null);
         else layout.setActiveRightUtil(key);
     }

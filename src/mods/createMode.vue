@@ -27,6 +27,7 @@
                     ref="root"
                     class="relative root shadow-xl border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden transition-all"
                     :style="{ width: `${ stageSize.width }px`, height: `${ stageSize.height }px`, background: activePage?.stage.background }"
+                    @pointerdown="handlePointerDown"
                 >
                     
                     
@@ -46,16 +47,31 @@
 </template>
 
 <script setup lang="ts" vapor>
-import { computed, ref, useTemplateRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
 import { usePagesStore } from "../stores/pages";
 import { useElementStore } from "../stores/element";
 import type { Page } from "../types/project";
+import type { Element } from "../types/element";
 
 const pages = usePagesStore();
 const elements = useElementStore()
 
+/** Stage root container that holds the rendered page DOM. */
 const root = useTemplateRef<HTMLElement>('root')
 
+/**
+ * Drag/drop state used by the delegated stage listeners.
+ * - draggingId: element currently being dragged
+ * - dropTargetId: latest valid container under the pointer
+ * - originParentId: parent before drag began (fallback if no valid drop)
+ */
+const draggingId = ref<string | null>(null);
+const dropTargetId = ref<string | null>(null);
+const originParentId = ref<string | null>(null);
+const cleanupFns: Array<() => void> = [];
+const highlightedId = ref<string | null>(null);
+
+/** Tabs sourced from cached pages to render the open pages strip. */
 const openPageTabs = computed(() =>
 Object.values(pages.pagesCache).map((page) => ({
     id: page.id,
@@ -63,8 +79,10 @@ Object.values(pages.pagesCache).map((page) => ({
 }))
 );
 
+/** Currently active page id pulled from pages store. */
 const activePageId = computed(() => pages.activePageId);
 
+/** Live active page data used for stage sizing and hit-testing. */
 const activePage = computed<Page | null>(() => pages.getActivePageData());
 
 watch(activePageId, (pageId) => {
@@ -82,9 +100,114 @@ watch(activePageId, (pageId) => {
     }
 }, { immediate: true });
 
+/** Size of the stage in px, defaulting when no page is active. */
 const stageSize = computed(() => {
     const stage = activePage.value?.stage;
     return stage ? { width: stage.width, height: stage.height } : { width: 1280, height: 720 };
 });
 
+/** Return true if an element type can host children (drop target). */
+const isContainerType = (el: Element | undefined | null) => {
+    if (!el) return false;
+    return el.type === 'collection' || el.type === 'container' || el.type === 'component';
+};
+
+/** Hit-test under the pointer to find a valid container element id. */
+const resolveDropTarget = (clientX: number, clientY: number) => {
+    const pointEl = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (!pointEl) return null;
+    const candidate = pointEl.closest('[data-element-id]') as HTMLElement | null;
+    if (!candidate) return null;
+    const id = candidate.dataset.elementId ?? null;
+    if (!id) return null;
+
+    const page = activePage.value;
+    if (!page) return null;
+    const el = page.elements[id];
+    if (!isContainerType(el)) return null;
+    if (draggingId.value && (id === draggingId.value)) return null;
+    return id;
+};
+
+/** Toggle highlight class on the current candidate drop target. */
+const updateDropHighlight = (nextId: string | null) => {
+    if (!activePageId.value) return;
+
+    const pageId = activePageId.value;
+
+    if (highlightedId.value && highlightedId.value !== nextId) {
+        const prevNode = elements.getNode(pageId, highlightedId.value);
+        prevNode?.classList.remove('drop-target-highlight');
+    }
+
+    if (nextId && nextId !== highlightedId.value) {
+        const nextNode = elements.getNode(pageId, nextId);
+        nextNode?.classList.add('drop-target-highlight');
+    }
+
+    highlightedId.value = nextId;
+};
+
+/** Delegate pointerdown on stage to start drag tracking and eventual reparent. */
+const handlePointerDown = (event: PointerEvent) => {
+    if (!root.value || !activePageId.value) return;
+    const target = (event.target as HTMLElement | null)?.closest('[data-element-id]') as HTMLElement | null;
+    if (!target) return;
+
+    const elementId = target.dataset.elementId;
+    if (!elementId) return;
+
+    draggingId.value = elementId;
+    const page = pages.pagesCache[activePageId.value];
+    originParentId.value = page?.elements[elementId]?.parentId ?? null;
+
+    target.setPointerCapture(event.pointerId);
+    target.style.opacity = '0.7';
+    target.style.pointerEvents = 'none';
+
+    const onMove = (e: PointerEvent) => {
+        const candidate = resolveDropTarget(e.clientX, e.clientY);
+        console.log('Target: ', candidate)
+        dropTargetId.value = candidate;
+        updateDropHighlight(candidate);
+    };
+
+    const onUp = (e: PointerEvent) => {
+        const currentId = draggingId.value;
+        draggingId.value = null;
+
+        target.style.opacity = '';
+        target.style.pointerEvents = '';
+
+        target.releasePointerCapture(e.pointerId);
+
+        const desiredParent = dropTargetId.value ?? originParentId.value;
+        dropTargetId.value = null;
+        originParentId.value = null;
+
+        updateDropHighlight(null);
+
+        if (currentId && root.value && activePageId.value !== null) {
+            elements.moveElement(activePageId.value, currentId, desiredParent, root.value);
+        }
+
+        cleanupFns.splice(0).forEach((fn) => fn());
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerup', onUp, { once: true });
+    cleanupFns.push(() => window.removeEventListener('pointermove', onMove));
+};
+
+onBeforeUnmount(() => {
+    cleanupFns.splice(0).forEach((fn) => fn());
+});
+
 </script>
+
+<style scoped>
+.drop-target-highlight {
+    outline: 2px dashed #38bdf8;
+    outline-offset: 2px;
+}
+</style>

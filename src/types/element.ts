@@ -1,25 +1,12 @@
 import { FlexDisplay, GridDisplay } from "./project";
 
-/**
- * Discriminated union of all element kinds that can appear on a page / inside a collection.
-*
-* NOTE: When adding a new type make sure to:
-*  - Extend the `Element` union below with the appropriate style payload.
-*  - Update any switch statements (renderers, class computation, creation helpers, history logic).
-*  - Consider isolation / nesting semantics if it can contain children.
-*/
-export type ElementType =
-| 'path'
-| 'text'
-| 'image'
-| 'collection'
-| 'component'
-| 'container'
-| ShapePreset;
+/* ============================================================
+   CORE LAYOUT & RESPONSIVE
+   ============================================================ */
 
 export type Positioning =
-  | { mode: 'flow' } // normal document flow (future-proof)
-  | {
+    | { mode: 'flow' }
+    | {
         mode: 'absolute';
         anchor: 'parent' | 'page';
         x: number;
@@ -27,14 +14,12 @@ export type Positioning =
         zIndex: number;
     };
 
-
 export interface Layout {
     positioning: Positioning;
 
     size: {
-        width: number;
-        height: number;
-        locked?: boolean;
+        width: number | 'full' | 'auto';
+        height: number | 'full' | 'auto';
     };
 
     transform?: {
@@ -43,10 +28,9 @@ export interface Layout {
         scaleY?: number;
     };
 
-    visible?: boolean;
-    locked?: boolean;
+    visible: boolean;
+    locked: boolean;
 }
-
 
 /** Named breakpoint ids for responsive overrides. */
 export type BreakpointId = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -55,26 +39,51 @@ export type ResponsiveDelta<TStyle> = {
     breakpoint: BreakpointId;
     layout?: Partial<Layout>;
     style?: Partial<TStyle>;
+    effects?: Partial<Effects>;
 };
 
-export type ShapePreset = 
-| 'line'
-| 'rectangle'
-| 'square'
-| 'circle'
-| 'ellipse'
-| 'triangle'
-| 'hexagon'
-| 'star'
-| 'arrow'
-| 'hotspot'
+/* ============================================================
+   INTERACTION & EFFECTS
+   ============================================================ */
+
+/** Layout-derived animatable properties */
+export interface AnimatableLayoutProps {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+
+    rotation: number;
+    scaleX: number;
+    scaleY: number;
+}
+
+/** Effects-derived animatable properties */
+export interface AnimatableEffectProps {
+    opacity: number;
+    blur: number;
+
+    shadowOffsetX: number;
+    shadowOffsetY: number;
+    shadowBlur: number;
+}
+
+export type AnimatableProps =
+    Partial<AnimatableLayoutProps & AnimatableEffectProps>;
 
 
 /** Standard easing keywords for animation timelines. */
 type Easing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 
 /** DOM‑like events we surface for element trigger bindings. */
-export type ElementEvent = 'click' | 'dblclick' | 'mouseenter' | 'mouseleave' | 'pointerdown' | 'pointerup' | 'keypress';
+export type ElementEvent =
+    | 'click'
+    | 'dblclick'
+    | 'mouseenter'
+    | 'mouseleave'
+    | 'pointerdown'
+    | 'pointerup'
+    | 'keypress';
 
 /**
  * A trigger binds an event to one or more actions (mini behaviour graph).
@@ -82,12 +91,10 @@ export type ElementEvent = 'click' | 'dblclick' | 'mouseenter' | 'mouseleave' | 
  * without requiring a schema migration for existing documents.
 */
 export type ElementTrigger = {
-    /** Stable id (used by history + editing panels). */
     id: string;
-    /** Event that fires this trigger. */
     event: ElementEvent;
     /** Ordered list of side‑effects (navigation, animation, property mutation, etc.). */
-    actions: Array<{ type: string; params?: Record<string, unknown> }>; // e.g., navigate, playAnimation, setProp
+    actions: Array<{ type: string; params?: Record<string, unknown> }>;
 };
 
 /**
@@ -96,25 +103,22 @@ export type ElementTrigger = {
 */
 export type ElementAnimation = {
     id: string;
-    /** Friendly name shown in timeline / inspector. */
     name?: string;
     /** Starting property overrides (falls back to current element state if omitted). */
-    from?: Partial<{ x: number; y: number; width: number; height: number; opacity: number; rotation: number }>;
+    from?: Partial<AnimatableProps & AnimatableEffectProps>;
     /** Target property values (only specified keys animate). */
-    to: Partial<{ x: number; y: number; width: number; height: number; opacity: number; rotation: number }>;
-    /** Duration in milliseconds. */
-    duration: number; // ms
+    to: Partial<AnimatableProps & AnimatableEffectProps>;
+    duration: number;
     /** Optional initial delay before playing (ms). */
-    delay?: number; // ms
-    /** Easing function keyword. */
+    delay?: number;
     easing?: Easing;
     /** If true the animation restarts automatically. */
     loop?: boolean;
 };
 
 export interface Effects {
-    opacity?: number;
-    blur?: number;
+    opacity: number;
+    blur: number;
     shadow?: {
         color: string;
         offsetX: number;
@@ -123,33 +127,60 @@ export interface Effects {
     };
 }
 
-
+/* ============================================================
+   BASE ELEMENT
+   ============================================================ */
 /**
  * Properties shared by every element variant.
  * Keep this intentionally compact – large optional branches should live in variant style objects.
  */
-interface BaseElement<TStyle> {
+export interface BaseElement<TStyle> {
     id: string;
     name: string;
-    type: ElementType;
+
+    /** Structural family */
+    kind: 'html' | 'container' | 'component' | 'svg';
+
+    /** Concrete tag / role */
+    type: string;
 
     parentId?: string;
-    children?: string[];
+
     layout: Layout;
     effects: Effects;
-    style: TStyle;
 
+    style: TStyle;
     responsive?: ResponsiveDelta<TStyle>[];
 
-    interaction?: {
-        triggers?: ElementTrigger[];
-        animations?: ElementAnimation[];
+    interaction: {
+        triggers: ElementTrigger[];
+        animations: ElementAnimation[];
     };
 }
 
+/* ============================================================
+   HTML ELEMENTS (LEAF NODES)
+   ============================================================ */
 
-/** Styling for pure text elements. */
-interface TextStyle {
+export type HtmlElementType =
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'button'
+    | 'input'
+    | 'textarea'
+    | 'label'
+    | 'icon';
+
+
+export interface HTMLElementBase<TStyle, TKind extends HtmlElementType> extends BaseElement<TStyle> {
+    kind: 'html';
+    type: TKind;
+}
+
+/** Text style reused by HTML + SVG text overlays */
+export interface TextStyle {
     content: string;
 
     font: {
@@ -159,7 +190,7 @@ interface TextStyle {
         style?: 'normal' | 'italic';
     };
 
-    transform?: 'Normal' | 'uppercase' | 'lowercase' | 'capitalize';
+    transform?: 'normal' | 'uppercase' | 'lowercase' | 'capitalize';
     color: string;
     align?: 'left' | 'center' | 'right';
     lineHeight?: number;
@@ -169,52 +200,13 @@ interface TextStyle {
     decoration: 'underline' | 'line-through' | 'none';
 }
 
-/** Shared styling for simple shapes (rect, circle, hotspot, collection container). */
-interface ShapeStyle {
-    fill?: string;
-    sides: number;
-
-    textContent?: {
-        text: TextStyle
-        placementH: 'left' | 'center' | 'right';
-        placementV: 'top' | 'center' | 'bottom';
-    }
-
-    isArrow?: {
-        start?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
-        end?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
-    }
-
-    stroke?: {
-        color: string;
-        width: number;
-        style?: 'solid' | 'dashed' | 'dotted';
-        sides: {
-            top: boolean;
-            right: boolean;
-            bottom: boolean;
-            left: boolean;
-        }
-    };
-
-    radius?: number | {
-        tl: number;
-        tr: number;
-        br: number;
-        bl: number;
-    };
-
-    padding?: number | {
-        top: number;
-        right: number;
-        bottom: number;
-        left: number;
-    };
-}
-
-interface ImageStyle {
+export interface ImageStyle {
     src: string;
-    fit?: 'cover' | 'contain' | 'fill';
+    alt?: string;
+
+    fit?: 'cover' | 'contain' | 'fill' | 'none';
+    position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
+
     filters?: {
         brightness?: number;
         contrast?: number;
@@ -223,35 +215,207 @@ interface ImageStyle {
     };
 }
 
-interface PathStyle {
-    fill: string;
-    stroke: {
+export interface MediaStyle {
+    src: string;
+    autoplay?: boolean;
+    loop?: boolean;
+    muted?: boolean;
+    controls?: boolean;
+}
+
+export type InputType =
+    | 'text'
+    | 'password'
+    | 'email'
+    | 'number'
+    | 'checkbox'
+    | 'radio'
+    | 'date';
+
+export interface InputStyle {
+    value?: string | number | boolean;
+    placeholder?: string;
+    disabled?: boolean;
+    required?: boolean;
+}
+
+export interface IconStyle {
+    name: string;        // icon id
+    size?: number;
+    color?: string;
+}
+
+export type TextElement = HTMLElementBase<TextStyle, 'text'>;
+export type ImageElement = HTMLElementBase<ImageStyle, 'image'>;
+export type VideoElement = HTMLElementBase<MediaStyle, 'video'>;
+export type AudioElement = HTMLElementBase<MediaStyle, 'audio'>;
+export type InputElement = HTMLElementBase<InputStyle, 'input'>;
+export type TextareaElement = HTMLElementBase<InputStyle, 'textarea'>;
+export type IconElement = HTMLElementBase<IconStyle, 'icon'>;
+
+export type HTMLElement =
+    | TextElement
+    | ImageElement
+    | VideoElement
+    | AudioElement
+    | InputElement
+    | TextareaElement
+    | IconElement;
+
+
+/* ============================================================
+   CONTAINERS (FLOW / LAYOUT BACKBONE)
+   ============================================================ */
+
+export type ContainerType =
+    | 'div'
+    | 'section'
+    | 'article'
+    | 'header'
+    | 'footer'
+    | 'nav'
+    | 'list'
+    | 'form'
+    | 'group';
+
+export interface ContainerStyle {
+    background?: string;
+    padding?: number | BoxEdges;
+    border?: BorderStyle;
+}
+
+export interface ContainerElement extends BaseElement<ContainerStyle> {
+    kind: 'container';
+    type: ContainerType;
+
+    children: string[];
+
+    /** Display & layout rules */
+    display:
+    | { mode: 'block' }
+    | { mode: 'flex'; config: FlexDisplay }
+    | { mode: 'grid'; config: GridDisplay };
+
+    /** Optional semantic metadata */
+    role?: 'list' | 'form' | 'navigation' | 'section';
+}
+
+/* ============================================================
+   COMPONENT ELEMENTS (VUE-LIKE NODES)
+   ============================================================ */
+
+export interface ComponentElement extends BaseElement<Record<string, unknown>> {
+    kind: 'component';
+    type: 'component';
+
+    componentId: string;
+
+    /** External children (slots) */
+    children: string[];
+
+    /** Props passed to component */
+    props: Record<string, unknown>;
+
+    /** Slot mapping */
+    slots?: Record<string, string[]>;
+}
+
+/* ============================================================
+   SVG / SHAPE ELEMENTS (FREEFORM LAYER)
+   ============================================================ */
+
+export type SvgShapeType =
+    | 'rect'
+    | 'circle'
+    | 'ellipse'
+    | 'line'
+    | 'polygon'
+    | 'star'
+    | 'arrow'
+    | 'path'
+    | 'hotspot';
+
+export type PathCommand =
+    | { type: 'M'; x: number; y: number }
+    | { type: 'L'; x: number; y: number }
+    | { type: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+    | { type: 'Q'; x1: number; y1: number; x: number; y: number }
+    | { type: 'Z' };
+
+export interface SvgStyle {
+    fill?: string;
+
+    stroke?: {
         color: string;
         width: number;
         style?: 'solid' | 'dashed' | 'dotted';
-    }
-    closed: boolean;
-    smooth: boolean;
+    };
+
+    opacity?: number;
+
+    radius?: number | {
+        tl: number;
+        tr: number;
+        br: number;
+        bl: number;
+    };
+
+    arrow?: {
+        start?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
+        end?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
+    };
+
+    /** Optional embedded text */
+    textContent?: {
+        text: TextStyle;
+        placementH: 'left' | 'center' | 'right';
+        placementV: 'top' | 'center' | 'bottom';
+        padding?: number;
+    };
 }
 
-/** Commands used to define the path of a free form element */
-type PathCommand = 
-    | { type: 'M'; x: number; y: number } // Move to
-    | { type: 'L'; x: number; y: number } // Line to
-    | { type: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number } // Cubic Bezier
-    | { type: 'Q'; x1: number; y1: number; x: number; y: number } // Quadratic Bezier
-    | { type: 'Z' }; // Close path
+export interface SvgElement extends BaseElement<SvgStyle> {
+    kind: 'svg';
+    type: SvgShapeType;
 
-/**
- * Final discriminated union tying each element `type` to its style payload.
- * Collections carry an additional `memberIds` list (composition) – their children
- * live as independent Element entries for simpler indexing / history, but inherit
- * relative positioning via `parentId`.
- */
+    /** Geometry payload */
+    geometry:
+    | { type: 'rect'; width: number; height: number }
+    | { type: 'circle'; r: number }
+    | { type: 'ellipse'; rx: number; ry: number }
+    | { type: 'line'; x1: number; y1: number; x2: number; y2: number }
+    | { type: 'polygon'; points: Array<{ x: number; y: number }> }
+    | { type: 'star'; points: number; innerRadius: number; outerRadius: number }
+    | { type: 'arrow'; from: { x: number; y: number }; to: { x: number; y: number } }
+    | { type: 'path'; commands: PathCommand[] }
+    | { type: 'hotspot'; width: number; height: number };
+}
+
+/* ============================================================
+   SHARED UTILS
+   ============================================================ */
+
+export interface BoxEdges {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+    locked: boolean;
+}
+
+export interface BorderStyle {
+    color: string;
+    width: number;
+    style: 'solid' | 'dashed' | 'dotted';
+}
+
+
+/* ============================================================
+   FINAL ELEMENT UNION
+   ============================================================ */
+
 export type Element =
-    | (BaseElement<PathStyle> & { type: 'path'; commands: PathCommand[] })
-    | (BaseElement<ShapeStyle> & { type: ShapePreset })
-    | (BaseElement<ShapeStyle> & { type: 'collection'; memberIds: string[] })
-    | (BaseElement<TextStyle> & { type: 'text' })
-    | (BaseElement<ImageStyle> & { type: 'image' })
-    | (BaseElement<{}> & { type: 'container' | 'component'; memberIds: string[], display: GridDisplay | FlexDisplay });
+    | HTMLElement
+    | ContainerElement
+    | ComponentElement
+    | SvgElement;
