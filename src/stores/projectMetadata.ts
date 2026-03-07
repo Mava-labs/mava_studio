@@ -159,23 +159,32 @@ export const useProjectMetadataStore = defineStore(
                 id: newElementId,
                 name: "Welcome Text",
                 type: "text",
-                children: [],
+                kind: "html",
+                //children: [],
                 layout: {
+                    locked: false,
                     positioning: {
                         mode: "flow"
                     },
                     size: { width: 520, height: 120 },
                     visible: true,
                 },
-                effects: { opacity: 1 },
+                effects: {
+                    opacity: 1,
+                    blur: 0
+                },
                 style: {
                     content: "Double-click to edit me",
                     font: { size: 28, weight: "bold", family: "Inter, sans-serif" },
-                    transform: "Normal",
+                    transform: "normal",
                     color: "#ffffff",
                     align: "left",
                     lineHeight: 34,
                     decoration: "none",
+                },
+                interaction: {
+                    triggers: [],
+                    animations: []
                 },
             };
 
@@ -183,7 +192,7 @@ export const useProjectMetadataStore = defineStore(
                 id: newPageId,
                 visible: true,
                 elements: { [newElementId]: mockTextElement },
-                roots: [newElementId],
+                rootIds: [newElementId],
                 stage: {
                     width: DEFAULT_STAGE.width,
                     height: DEFAULT_STAGE.height,

@@ -5,8 +5,7 @@ import { readTextFile, writeTextFile, exists, mkdir } from "@tauri-apps/plugin-f
 import type { Page } from "../types/project";
 import { useProjectMetadataStore } from "./projectMetadata";
 import { useNotificationStore } from "./notification";
-import type { Element, ElementType } from "../types/element";
-import { generateId } from "../utils/id";
+import type { Element } from "../types/element";
 
 /** Default stage values when a page omits sizing or background. */
 const DEFAULT_STAGE = {
@@ -32,9 +31,9 @@ export const usePagesStore = defineStore("pages", () => {
         height: stage?.height && stage.height > 0 ? stage.height : DEFAULT_STAGE.height,
         background: stage?.background ?? DEFAULT_STAGE.background,
         display: {
-            columns: 1,
-            rows: 3,
-            gap: 0
+            columns: "1",
+            rows: "3",
+            gap: "0"
         }
     });
 

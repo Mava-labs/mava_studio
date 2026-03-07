@@ -3,15 +3,20 @@ import type { Element } from './element';
 // Project data schema version (increment on breaking structural changes)
 export const CURRENT_PROJECT_VERSION = 1 as const;
 export type GridDisplay = {
-    columns: number,
-    rows: number,
-    gap: number
+    columns: string,
+    rows: string,
+    gap: string
 }
 
 export type FlexDisplay = {
     grow: number,
     row: boolean,
     spacing: 'space-between' | 'evenly-spaced' | 'start' | 'end'
+    direction: 'row' | 'column' | 'row-reverse' | 'column-reverse'
+    wrap: 'nowrap' | 'wrap' | 'wrap-reverse'
+    gap: string
+    alignItems: 'start' | 'center' | 'end' | 'stretch'
+    justifyContent: 'start' | 'center' | 'end' | 'space-between' | 'space-around' | 'space-evenly'
 }
 
 export type Page = {

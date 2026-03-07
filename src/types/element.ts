@@ -139,7 +139,7 @@ export interface BaseElement<TStyle> {
     name: string;
 
     /** Structural family */
-    kind: 'html' | 'container' | 'component' | 'svg';
+    kind: 'flatHtml' | 'container' | 'component' | 'svg';
 
     /** Concrete tag / role */
     type: string;
@@ -162,7 +162,7 @@ export interface BaseElement<TStyle> {
    HTML ELEMENTS (LEAF NODES)
    ============================================================ */
 
-export type HtmlElementType =
+export type FlatHtml =
     | 'text'
     | 'image'
     | 'video'
@@ -173,11 +173,6 @@ export type HtmlElementType =
     | 'label'
     | 'icon';
 
-
-export interface HTMLElementBase<TStyle, TKind extends HtmlElementType> extends BaseElement<TStyle> {
-    kind: 'html';
-    type: TKind;
-}
 
 /** Text style reused by HTML + SVG text overlays */
 export interface TextStyle {
@@ -245,23 +240,10 @@ export interface IconStyle {
     color?: string;
 }
 
-export type TextElement = HTMLElementBase<TextStyle, 'text'>;
-export type ImageElement = HTMLElementBase<ImageStyle, 'image'>;
-export type VideoElement = HTMLElementBase<MediaStyle, 'video'>;
-export type AudioElement = HTMLElementBase<MediaStyle, 'audio'>;
-export type InputElement = HTMLElementBase<InputStyle, 'input'>;
-export type TextareaElement = HTMLElementBase<InputStyle, 'textarea'>;
-export type IconElement = HTMLElementBase<IconStyle, 'icon'>;
-
-export type HTMLElement =
-    | TextElement
-    | ImageElement
-    | VideoElement
-    | AudioElement
-    | InputElement
-    | TextareaElement
-    | IconElement;
-
+export interface FlatHtmlElement extends BaseElement<TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle>{
+    kind: 'flatHtml';
+    type: FlatHtml;
+};
 
 /* ============================================================
    CONTAINERS (FLOW / LAYOUT BACKBONE)
@@ -415,7 +397,7 @@ export interface BorderStyle {
    ============================================================ */
 
 export type Element =
-    | HTMLElement
+    | FlatHtmlElement
     | ContainerElement
     | ComponentElement
     | SvgElement;
