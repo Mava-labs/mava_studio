@@ -6,35 +6,51 @@
         </div>
 
         <div class="grid grid-cols-2 gap-2 mt-3">
-            <div class="input-block">
-                <label class="input-label">X</label>
-                <div class="input-shell">
-                    <input type="number" class="input-field" :value="posX" :disabled="isFlow"
+            <div class="field">
+                <span class="clab">X</span>
+                <div class="num" :class="{ disabled: isFlow }">
+                    <input type="number" :value="posX" :disabled="isFlow"
                         @change="setX(+($event.target as HTMLInputElement).value)" aria-label="X position" />
+                    <div class="steppers">
+                        <button class="step" type="button" :disabled="isFlow" @click="setX(posX + 1)">▴</button>
+                        <button class="step" type="button" :disabled="isFlow" @click="setX(posX - 1)">▾</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="input-block">
-                <label class="input-label">W</label>
-                <div class="input-shell">
-                    <input type="number" class="input-field" :value="width"
+            <div class="field">
+                <span class="clab">W</span>
+                <div class="num">
+                    <input type="number" :value="width"
                         @change="setWidth(+($event.target as HTMLInputElement).value)" aria-label="Width" />
+                    <div class="steppers">
+                        <button class="step" type="button" @click="setWidth(Math.max(0, width + 1))">▴</button>
+                        <button class="step" type="button" @click="setWidth(Math.max(0, width - 1))">▾</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="input-block">
-                <label class="input-label">Y</label>
-                <div class="input-shell">
-                    <input type="number" class="input-field" :value="posY" :disabled="isFlow"
+            <div class="field">
+                <span class="clab">Y</span>
+                <div class="num" :class="{ disabled: isFlow }">
+                    <input type="number" :value="posY" :disabled="isFlow"
                         @change="setY(+($event.target as HTMLInputElement).value)" aria-label="Y position" />
+                    <div class="steppers">
+                        <button class="step" type="button" :disabled="isFlow" @click="setY(posY + 1)">▴</button>
+                        <button class="step" type="button" :disabled="isFlow" @click="setY(posY - 1)">▾</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="input-block">
-                <label class="input-label">H</label>
-                <div class="input-shell">
-                    <input type="number" class="input-field" :value="height"
+            <div class="field">
+                <span class="clab">H</span>
+                <div class="num">
+                    <input type="number" :value="height"
                         @change="setHeight(+($event.target as HTMLInputElement).value)" aria-label="Height" />
+                    <div class="steppers">
+                        <button class="step" type="button" @click="setHeight(Math.max(0, height + 1))">▴</button>
+                        <button class="step" type="button" @click="setHeight(Math.max(0, height - 1))">▾</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -86,75 +102,24 @@
 </script>
 
 <style scoped>
-    .panel-root {
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
-        color: #e2e8f0;
-    }
+    .panel-root { font-family: system-ui, sans-serif; font-size: 12px; color: #e2e8f0; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+    .section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #cbd5e1; }
+    .badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; background: #0f172a; color: #94a3b8; text-transform: uppercase; }
 
-    .section-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #1e293b;
-        padding-bottom: 6px;
-    }
+    .field { display: flex; align-items: center; gap: 6px; }
+    .clab { font-size: 10px; color: #94a3b8; text-transform: uppercase; min-width: 12px; }
 
-    .section-title {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #cbd5e1;
-    }
+    /* Number input with steppers */
+    .num { position: relative; flex: 1 1 auto; }
+    .num input[type=number] { width: 100%; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px; padding: 6px 22px 6px 8px; border-radius: 6px; outline: none; }
+    .num.disabled input[type=number] { color: #64748b; cursor: not-allowed; }
+    .steppers { position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; gap: 1px; }
+    .step { width: 16px; flex: 1 1 0; background: #1f2937; border: 1px solid #334155; color: #e2e8f0; font-size: 9px; line-height: 1; padding: 0; border-radius: 2px; cursor: pointer; }
+    .step:hover { background: #374151; }
+    .step:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .badge {
-        font-size: 10px;
-        padding: 2px 8px;
-        border-radius: 8px;
-        background: #0f172a;
-        color: #94a3b8;
-        text-transform: uppercase;
-    }
-
-    .input-block {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        background: #0f172a;
-        padding: 8px 10px;
-        border-radius: 6px;
-        border: 1px solid #1e293b;
-    }
-
-    .input-label {
-        width: 16px;
-        font-weight: 600;
-        font-size: 11px;
-        color: #cbd5e1;
-    }
-
-    .input-shell {
-        flex: 1;
-        display: flex;
-        background: #0b1221;
-        border: 1px solid #27354a;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .input-field {
-        width: 100%;
-        background: transparent;
-        color: #f1f5f9;
-        padding: 6px 10px;
-        font-size: 12px;
-        border: none;
-        outline: none;
-    }
-
-    .input-field:disabled {
-        color: #64748b;
-        cursor: not-allowed;
-    }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    /* input[type=number] { -moz-appearance: textfield; } */
 </style>

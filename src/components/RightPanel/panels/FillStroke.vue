@@ -6,30 +6,41 @@
         </div>
 
         <div class="flex flex-col gap-3">
-            <div class="input-block">
-                <label class="input-label">Fill</label>
-                <input type="color" class="color-input" :value="fillColor"
+            <div class="prop-row">
+                <span class="clab">Fill</span>
+                <input type="color" class="color-chip" :value="fillColor"
                     @input="setFill(($event.target as HTMLInputElement).value)" aria-label="Fill color" />
             </div>
 
-            <div class="input-block">
-                <label class="input-label">Stroke</label>
-                <div class="grid grid-cols-[auto_1fr] gap-2 items-center w-full">
-                    <input type="color" class="color-input" :value="strokeColor"
-                        @input="setStrokeColor(($event.target as HTMLInputElement).value)" aria-label="Stroke color" />
-                    <div class="grid grid-cols-[1fr_1fr] gap-2">
-                        <input type="number" min="0" step="0.5" class="input-field" :value="strokeWidth"
-                            @change="setStrokeWidth(+($event.target as HTMLInputElement).value)"
-                            aria-label="Stroke width" />
-                        <select class="input-field" :value="strokeStyle"
-                            @change="setStrokeStyle(($event.target as HTMLSelectElement).value as any)"
-                            aria-label="Stroke style">
-                            <option value="solid">Solid</option>
-                            <option value="dashed">Dashed</option>
-                            <option value="dotted">Dotted</option>
-                        </select>
+            <div class="prop-row">
+                <span class="clab">Stroke</span>
+                <input type="color" class="color-chip" :value="strokeColor"
+                    @input="setStrokeColor(($event.target as HTMLInputElement).value)" aria-label="Stroke color" />
+            </div>
+
+            <div class="prop-row">
+                <span class="clab">Width</span>
+                <div class="num">
+                    <input type="number" min="0" step="0.5" :value="strokeWidth"
+                        @change="setStrokeWidth(+($event.target as HTMLInputElement).value)"
+                        aria-label="Stroke width" />
+                    <span class="unit">px</span>
+                    <div class="steppers">
+                        <button class="step" type="button" @click="setStrokeWidth(Math.max(0, strokeWidth + 0.5))">▴</button>
+                        <button class="step" type="button" @click="setStrokeWidth(Math.max(0, strokeWidth - 0.5))">▾</button>
                     </div>
                 </div>
+            </div>
+
+            <div class="prop-row">
+                <span class="clab">Style</span>
+                <select class="sel" :value="strokeStyle"
+                    @change="setStrokeStyle(($event.target as HTMLSelectElement).value as any)"
+                    aria-label="Stroke style">
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                </select>
             </div>
         </div>
     </div>
@@ -64,72 +75,27 @@
 </script>
 
 <style scoped>
-    .panel-root {
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
-        color: #e2e8f0;
-    }
+    .panel-root { font-family: system-ui, sans-serif; font-size: 12px; color: #e2e8f0; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+    .section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #cbd5e1; }
+    .badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; background: #0f172a; color: #94a3b8; text-transform: uppercase; }
 
-    .section-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #1e293b;
-        padding-bottom: 6px;
-    }
+    .prop-row { display: flex; align-items: center; gap: 8px; }
+    .clab { font-size: 10px; color: #94a3b8; text-transform: uppercase; min-width: 36px; }
 
-    .section-title {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #cbd5e1;
-    }
+    .color-chip { flex: 1 1 auto; height: 28px; padding: 2px 4px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
 
-    .badge {
-        font-size: 10px;
-        padding: 2px 8px;
-        border-radius: 8px;
-        background: #0f172a;
-        color: #94a3b8;
-        text-transform: uppercase;
-    }
+    /* Number input with steppers */
+    .num { position: relative; flex: 1 1 auto; }
+    .num input[type=number] { width: 100%; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px; padding: 5px 38px 5px 8px; border-radius: 6px; outline: none; }
+    .unit { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #94a3b8; pointer-events: none; }
+    .steppers { position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; gap: 1px; }
+    .step { width: 16px; flex: 1 1 0; background: #1f2937; border: 1px solid #334155; color: #e2e8f0; font-size: 9px; line-height: 1; padding: 0; border-radius: 2px; cursor: pointer; }
+    .step:hover { background: #374151; }
 
-    .input-block {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        background: #0f172a;
-        padding: 10px;
-        border-radius: 6px;
-        border: 1px solid #1e293b;
-    }
+    .sel { flex: 1 1 auto; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px; padding: 5px 8px; border-radius: 6px; outline: none; }
 
-    .input-label {
-        font-weight: 600;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        color: #cbd5e1;
-        text-transform: uppercase;
-    }
-
-    .input-field {
-        width: 100%;
-        background: #0b1221;
-        color: #f1f5f9;
-        padding: 8px 10px;
-        font-size: 12px;
-        border: 1px solid #27354a;
-        border-radius: 6px;
-        outline: none;
-    }
-
-    .color-input {
-        width: 100%;
-        height: 36px;
-        padding: 4px 6px;
-        background: #0b1221;
-        border: 1px solid #27354a;
-        border-radius: 6px;
-    }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    /* input[type=number] { -moz-appearance: textfield; } */
 </style>

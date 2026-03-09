@@ -187,7 +187,7 @@ export interface TextStyle {
 
     transform?: 'normal' | 'uppercase' | 'lowercase' | 'capitalize';
     color: string;
-    align?: 'left' | 'center' | 'right';
+    align?: 'left' | 'center' | 'right' | 'justify';
     lineHeight?: number;
     letterSpacing?: number;
     whiteSpace?: 'normal' | 'nowrap' | 'pre-wrap';
@@ -240,7 +240,7 @@ export interface IconStyle {
     color?: string;
 }
 
-export interface FlatHtmlElement extends BaseElement<TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle>{
+export interface FlatHtmlElement extends BaseElement<TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle> {
     kind: 'flatHtml';
     type: FlatHtml;
 };
@@ -264,6 +264,12 @@ export interface ContainerStyle {
     background?: string;
     padding?: number | BoxEdges;
     border?: BorderStyle;
+    radius?: number | {
+        tl: number;
+        tr: number;
+        br: number;
+        bl: number;
+    };
 }
 
 export interface ContainerElement extends BaseElement<ContainerStyle> {

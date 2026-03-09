@@ -1,6 +1,6 @@
 <template>
-    <div class="panel-root flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-4 py-3">
-        <div v-if="element" class="border-b border-slate-300 dark:border-slate-600 mb-2 px-3">
+    <div class="panel-root flex-1 min-h-0 relative overflow-y-auto thin-scroll overflow-x-hidden flex flex-col gap-4 pb-3">
+        <div v-if="element" class="sticky top-0 z-50 bg-slate-900 border-b border-slate-300 dark:border-slate-600 mb-2 px-3">
             <UnifiedToolbar mode="multiselect" :singleStageAlign="true" placement="panel" />
         </div>
         <div v-if="element" class="element-header flex justify-between items-center px-3">
@@ -41,7 +41,8 @@
                 </svg>
             </div>
         </div>
-        <div v-if="!element" class="px-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+
+        <div v-if="!element" class="px-3 flex-1 min-h-0 h-full overflow-y-auto overflow-x-hidden">
             <label class="element-header" for="device-select">Device</label>
             <select id="device-select"
                 class="w-full mb-3 bg-slate-900 border border-slate-600 text-slate-100 text-xs p-2 rounded">
@@ -73,10 +74,10 @@
             <!-- ── Image only ── -->
             <ImagePanel v-if="isImage" />
 
-            <RadiusPanel v-if="hasRadius" />
+            <RadiusPanel v-if="isContainer || isSvg" />
 
             <!-- ── Container only ── -->
-            <PaddingPanel v-if="isContainer" />
+            <PaddingPanel v-if="isContainer || isSvg" />
 
             <!-- ── Transform & Effects ── Always appear -->
             <TransformPanel />
@@ -113,11 +114,6 @@
     const isContainer = computed(() => element.value?.kind === 'container');
     const isSvg = computed(() => element.value?.kind === 'svg');
 
-    /** Radius is available on SVG rects/circles/ellipses that have the property in their style. */
-    const hasRadius = computed(() => {
-        if (!element.value) return false;
-        return 'radius' in (element.value.style as Record<string, unknown>);
-    });
 </script>
 
 <style scoped>

@@ -19,15 +19,19 @@
 
         <div class="section">
             <div class="section-sub">Adjustments</div>
-            <div class="slider-row" v-for="item in sliders" :key="item.key">
-                <div class="row-label">{{ item.label }}</div>
-                <div class="row-controls">
-                    <input type="range" :min="item.min" :max="item.max" :step="item.step" class="slider"
+            <div class="control-row" v-for="item in sliders" :key="item.key">
+                <span class="clab">{{ item.label }}</span>
+                <div class="sliderRow">
+                    <input type="range" :min="item.min" :max="item.max" :step="item.step" class="range"
                         v-model.number="item.model.value" :aria-label="item.label" />
-                    <div class="value-box">
-                        <input type="number" :min="item.min" :max="item.max" :step="item.step" class="value-input"
+                    <div class="num">
+                        <input type="number" :min="item.min" :max="item.max" :step="item.step"
                             v-model.number="item.model.value" />
-                        <span class="value-suffix">{{ item.suffix }}</span>
+                        <span class="unit">{{ item.suffix }}</span>
+                        <div class="steppers">
+                            <button class="step" type="button" @click="item.model.value = Math.min(item.max, item.model.value + item.step)">▴</button>
+                            <button class="step" type="button" @click="item.model.value = Math.max(item.min, item.model.value - item.step)">▾</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -143,18 +147,18 @@
     }
 
     .fit-pill {
-        padding: 8px 12px;
-        border-radius: 8px;
-        border: 1px solid #1e293b;
-        background: #0f172a;
+        padding: 5px 10px;
+        border-radius: 6px;
+        border: 1px solid #334155;
+        background: #1f2937;
         color: #e2e8f0;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 11px;
     }
 
     .fit-pill.active {
-        background: #2563eb;
-        border-color: #2563eb;
+        background: #334155;
+        border-color: #3b82f6;
         color: #f8fafc;
     }
 
@@ -166,56 +170,22 @@
         clip: rect(0 0 0 0);
     }
 
-    .slider-row {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
+    .control-row { display: flex; flex-direction: column; gap: 4px; }
+    .clab { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
 
-    .row-label {
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: #94a3b8;
-        font-weight: 600;
-    }
+    /* Slider row */
+    .sliderRow { display: flex; align-items: center; gap: 8px; }
+    .range { flex: 1 1 auto; accent-color: #3b82f6; }
 
-    .row-controls {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-        gap: 10px;
-    }
+    /* Number input with steppers */
+    .num { position: relative; width: 68px; flex-shrink: 0; }
+    .num input[type=number] { width: 100%; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px; padding: 5px 20px 5px 8px; border-radius: 6px; outline: none; }
+    .unit { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #94a3b8; pointer-events: none; }
+    .steppers { position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; gap: 1px; }
+    .step { width: 16px; flex: 1 1 0; background: #1f2937; border: 1px solid #334155; color: #e2e8f0; font-size: 9px; line-height: 1; padding: 0; border-radius: 2px; cursor: pointer; }
+    .step:hover { background: #374151; }
 
-    .slider {
-        width: 100%;
-        accent-color: #3b82f6;
-    }
-
-    .value-box {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        background: #0b1221;
-        border: 1px solid #27354a;
-        border-radius: 6px;
-        padding: 4px 8px;
-        min-width: 80px;
-        justify-content: center;
-    }
-
-    .value-input {
-        width: 48px;
-        background: transparent;
-        color: #f8fafc;
-        border: none;
-        outline: none;
-        font-size: 12px;
-        text-align: right;
-    }
-
-    .value-suffix {
-        font-size: 11px;
-        color: #cbd5e1;
-    }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    /* input[type=number] { -moz-appearance: textfield; } */
 </style>

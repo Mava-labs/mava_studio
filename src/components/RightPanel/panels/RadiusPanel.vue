@@ -3,22 +3,30 @@
 		<div v-if="!radius" class="text-xs text-slate-500 px-3 py-2">Nothing selected.</div>
 
 		<div v-else class="flex flex-col gap-3 px-3 pb-3">
-			<h3 class="text-[11px] font-semibold tracking-[0.14em] text-slate-300 uppercase">Rounded corners</h3>
+			<h3 class="section-title">Rounded corners</h3>
 
 			<div class="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
 				<div class="grid grid-cols-1 gap-2">
-					<input
-						type="number"
-						class="corner-input"
-						v-model.number="topLeft"
-						aria-label="Top left radius"
-					/>
-					<input
-						type="number"
-						class="corner-input"
-						v-model.number="bottomLeft"
-						aria-label="Bottom left radius"
-					/>
+					<div class="corner">
+						<span class="clab corner-icon tl">┘</span>
+						<div class="num">
+							<input type="number" v-model.number="topLeft" aria-label="Top left radius" />
+							<div class="steppers">
+								<button class="step" type="button" @click="topLeft = Math.max(0, topLeft + 1)">▴</button>
+								<button class="step" type="button" @click="topLeft = Math.max(0, topLeft - 1)">▾</button>
+							</div>
+						</div>
+					</div>
+					<div class="corner">
+						<span class="clab corner-icon bl">┐</span>
+						<div class="num">
+							<input type="number" v-model.number="bottomLeft" aria-label="Bottom left radius" />
+							<div class="steppers">
+								<button class="step" type="button" @click="bottomLeft = Math.max(0, bottomLeft + 1)">▴</button>
+								<button class="step" type="button" @click="bottomLeft = Math.max(0, bottomLeft - 1)">▾</button>
+							</div>
+						</div>
+					</div>
 				</div>
 
 				<button type="button" class="lock-btn" :class="{ active: linked }" @click="toggleLinked" aria-label="Toggle corner link">
@@ -26,18 +34,26 @@
 				</button>
 
 				<div class="grid grid-cols-1 gap-2">
-					<input
-						type="number"
-						class="corner-input"
-						v-model.number="topRight"
-						aria-label="Top right radius"
-					/>
-					<input
-						type="number"
-						class="corner-input"
-						v-model.number="bottomRight"
-						aria-label="Bottom right radius"
-					/>
+					<div class="corner">
+						<div class="num">
+							<input type="number" v-model.number="topRight" aria-label="Top right radius" />
+							<div class="steppers">
+								<button class="step" type="button" @click="topRight = Math.max(0, topRight + 1)">▴</button>
+								<button class="step" type="button" @click="topRight = Math.max(0, topRight - 1)">▾</button>
+							</div>
+						</div>
+						<span class="clab corner-icon tr">└</span>
+					</div>
+					<div class="corner">
+						<div class="num">
+							<input type="number" v-model.number="bottomRight" aria-label="Bottom right radius" />
+							<div class="steppers">
+								<button class="step" type="button" @click="bottomRight = Math.max(0, bottomRight + 1)">▴</button>
+								<button class="step" type="button" @click="bottomRight = Math.max(0, bottomRight - 1)">▾</button>
+							</div>
+						</div>
+						<span class="clab corner-icon br">┌</span>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -120,8 +136,24 @@ function applyRadius(next: { tl: number; tr: number; br: number; bl: number }) {
 
 <style scoped>
 .panel-root { font-family: system-ui, sans-serif; font-size: 12px; color: #e2e8f0; }
-.corner-input { width: 100%; background: #0b1221; color: #f1f5f9; padding: 8px 10px; font-size: 12px; border: 1px solid #27354a; border-radius: 6px; outline: none; }
-.lock-btn { width: 40px; height: 60px; display: grid; place-items: center; border-radius: 10px; border: 1px solid #1e293b; background: #0f172a; color: #cbd5e1; cursor: pointer; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
-.lock-btn.active { background: #2563eb; color: #f8fafc; border-color: #2563eb; }
-.icon { font-size: 16px; }
+.section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #cbd5e1; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+
+.clab { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+.corner { display: flex; align-items: center; gap: 4px; }
+.corner-icon { font-size: 14px; line-height: 1; color: #64748b; min-width: 14px; text-align: center; }
+
+/* Number input with steppers */
+.num { position: relative; flex: 1 1 auto; }
+.num input[type=number] { width: 100%; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-size: 11px; padding: 6px 20px 6px 8px; border-radius: 6px; outline: none; }
+.steppers { position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; gap: 1px; }
+.step { width: 16px; flex: 1 1 0; background: #1f2937; border: 1px solid #334155; color: #e2e8f0; font-size: 9px; line-height: 1; padding: 0; border-radius: 2px; cursor: pointer; }
+.step:hover { background: #374151; }
+
+.lock-btn { width: 36px; height: 56px; display: grid; place-items: center; border-radius: 8px; border: 1px solid #334155; background: #1f2937; color: #cbd5e1; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.lock-btn.active { background: #334155; border-color: #3b82f6; }
+.icon { font-size: 14px; }
+
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
 </style>

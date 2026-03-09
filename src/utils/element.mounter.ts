@@ -131,7 +131,6 @@ export function applyContainerStyleToNode(
     const s = node.style;
 
     s.background = style.background ?? '';
-
     if (style.padding !== undefined) {
         const p = style.padding;
         s.padding = typeof p === 'number'
@@ -143,6 +142,12 @@ export function applyContainerStyleToNode(
         s.border = `${style.border.width}px ${style.border.style} ${style.border.color}`;
     } else {
         s.border = '';
+    }
+
+    if (style.radius !== undefined) {
+        s.borderRadius = typeof style.radius === 'number'
+            ? `${style.radius}px`
+            : `${style.radius.tl}px ${style.radius.tr}px ${style.radius.br}px ${style.radius.bl}px`;
     }
 
     if (display.mode === 'flex') {
