@@ -159,7 +159,7 @@ export const useProjectMetadataStore = defineStore(
                 id: newElementId,
                 name: "Welcome Text",
                 type: "text",
-                kind: "html",
+                kind: "flatHtml",
                 //children: [],
                 layout: {
                     locked: false,
@@ -197,7 +197,7 @@ export const useProjectMetadataStore = defineStore(
                     width: DEFAULT_STAGE.width,
                     height: DEFAULT_STAGE.height,
                     background: DEFAULT_STAGE.background,
-                    display: { columns: 1, rows: 3, gap: 0 },
+                    display: { columns: "1", rows: "3", gap: "0" },
                 },
                 metadata: {
                     title: "Page 1",

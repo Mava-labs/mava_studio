@@ -14,7 +14,7 @@ const props = defineProps<{
 const hasChildren = computed(() => Boolean(props.node.children?.length));
 
 function toggle() {
-  if (hasChildren.value) layout.toggleOutline();
+  if (hasChildren.value) layout.toggleOutlineOrExplorer('outline');
 }
 </script>
 
@@ -27,7 +27,16 @@ function toggle() {
             @click="toggle"
         >
             <span class="w-3 text-center text-[10px] text-slate-500" v-if="hasChildren">
-                {{ layout.outlineExpaded ? '▾' : '▸' }}
+                <svg v-if="layout.outlineExpaded" class="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+                    width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="m19 9-7 7-7-7" />
+                </svg>
+                <svg v-else class="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+                    width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="m9 5 7 7-7 7" />
+                </svg>
             </span>
             <span v-else class="w-3" />
 

@@ -72,6 +72,16 @@
       ]
     },
     {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$TEMP/**" },
+        { "path": "D:/**" },
+        { "path": "C:/**" },
+        { "path": "/**" }
+      ]
+    },
+    {
       "identifier": "fs:allow-read-text-file",
       "allow": [
         {

@@ -1,16 +1,16 @@
 <script setup lang="ts" vapor>
 import ExplorerItem from "./explorerItem.vue";
 import type { ExplorerNode } from "./fileTree";
-import type { ActivePath } from "../../../stores/projectMetadata";
 
 const props = defineProps<{
     nodes: ExplorerNode[];
     depth?: number;
-    activePath?: ActivePath | null;
+    activePath?: any
 }>();
 
 const emit = defineEmits<{
     (e: "select", node: ExplorerNode): void;
+    (e: "nodeAction", payload: { action: string; node: ExplorerNode; newName?: string }): void;
 }>();
 </script>
 
@@ -23,6 +23,7 @@ const emit = defineEmits<{
       :depth="depth ?? 0"
       :active-path="activePath"
       @select="(payload) => emit('select', payload)"
+      @node-action="(payload) => emit('nodeAction', payload)"
     />
   </div>
 </template>

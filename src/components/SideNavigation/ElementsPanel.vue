@@ -1,26 +1,27 @@
 <template>
-    <div>
-        <div class="flex flex-col gap-2">
+    <div class="h-full overflow-y-auto thin-scroll bg-slate-950/80 backdrop-blur-sm">
+        <div class="flex flex-col gap-2 p-2">
             <div
                 v-for="(category, index) in categories"
                 :key="index"
             >
-                <span class="capitalize text-sm font-medium text-gray-500">{{ category.name }}</span>
-                <ul class="grid grid-cols-2 gap-2 p-2">
+                <span class="capitalize text-sm font-medium text-gray-300">{{ category.name }}</span>
+                <ul class="grid grid-cols-2 gap-2">
                     <li
                         v-for="(element, idx) in category.elements"
                         :key="idx"
-                        class="flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-400"
+                        class="flex flex-col items-center gap-1 p-2 rounded cursor-pointer hover:bg-gray-800"
                         @click="elementStore.addElement(element.type)"
                     >
                         <!--
                             visualSrc is kept as a string label for now.
                             Replace the inner div with an <img> or icon component when assets are ready.
                         -->
-                        <div class="w-6 h-6 bg-gray-200 rounded flex items-center justify-center text-xs">
-                            {{ element.visualSrc[0] }}
+                        <div class="w-15 h-10 rounded flex items-center justify-center text-xs overflow-hidden">
+                            <img :src="element.visualSrc" :alt="element.type" class="object-fill h-full w-full">
                         </div>
-                        <span class="capitalize text-sm">{{ element.type }}</span>
+                       
+                        <span class="capitalize text-xs font-bold text-gray-400">{{ element.type }}</span>
                     </li>
                 </ul>
             </div>
