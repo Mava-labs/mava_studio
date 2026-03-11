@@ -1,0 +1,595 @@
+syntax = "proto3";
+package mava;
+
+// ============================================================
+// SHARED PRIMITIVES
+// ============================================================
+
+message BoxEdges {
+    double top    = 1;
+    double right  = 2;
+    double bottom = 3;
+    double left   = 4;
+    bool   locked = 5;
+}
+
+message BorderStyle {
+    string color = 1;
+    double width = 2;
+    string style = 3; // "solid" | "dashed" | "dotted"
+}
+
+// ============================================================
+// LAYOUT & EFFECTS
+// ============================================================
+
+message FlexDisplay {
+    double grow            = 1;
+    bool   row             = 2;
+    string spacing         = 3;
+    string direction       = 4;
+    string wrap            = 5;
+    string gap             = 6;
+    string align_items     = 7;
+    string justify_content = 8;
+}
+
+message GridDisplay {
+    string columns = 1;
+    string rows    = 2;
+    string gap     = 3;
+}
+
+message AbsolutePositioning {
+    string anchor  = 1; // "parent" | "page"
+    double x       = 2;
+    double y       = 3;
+    int32  z_index = 4;
+}
+
+message Layout {
+    // positioning: flow = no AbsolutePositioning present
+    optional AbsolutePositioning absolute = 1;
+
+    // size
+    string size_width  = 2; // number serialised as string, or "full"/"auto"
+    string size_height = 3;
+
+    // transform
+    optional double rotation = 4;
+    optional double scale_x  = 5;
+    optional double scale_y  = 6;
+
+    bool visible = 7;
+    bool locked  = 8;
+}
+
+message Shadow {
+    string color    = 1;
+    double offset_x = 2;
+    double offset_y = 3;
+    double blur     = 4;
+}
+
+message Effects {
+    double          opacity = 1;
+    double          blur    = 2;
+    optional Shadow shadow  = 3;
+}
+
+// ============================================================
+// INTERACTION & ANIMATION
+// ============================================================
+
+message TriggerAction {
+    string type   = 1;
+    string params = 2; // JSON-encoded params map
+}
+
+message ElementTrigger {
+    string               id      = 1;
+    string               event   = 2;
+    repeated TriggerAction actions = 3;
+}
+
+message AnimatableProps {
+    optional double x             = 1;
+    optional double y             = 2;
+    optional double width         = 3;
+    optional double height        = 4;
+    optional double rotation      = 5;
+    optional double scale_x       = 6;
+    optional double scale_y       = 7;
+    optional double opacity       = 8;
+    optional double blur          = 9;
+    optional double shadow_offset_x = 10;
+    optional double shadow_offset_y = 11;
+    optional double shadow_blur   = 12;
+}
+
+message ElementAnimation {
+    string          id       = 1;
+    string          name     = 2;
+    AnimatableProps from     = 3;
+    AnimatableProps to       = 4;
+    double          duration = 5;
+    double          delay    = 6;
+    string          easing   = 7;
+    bool            loop     = 8;
+}
+
+message Interaction {
+    repeated ElementTrigger  triggers   = 1;
+    repeated ElementAnimation animations = 2;
+}
+
+// ============================================================
+// ELEMENT STYLES
+// ============================================================
+
+message TextFont {
+    string family = 1;
+    double size   = 2;
+    string weight = 3; // number or "normal"/"bold"
+    string style  = 4; // "normal" | "italic"
+}
+
+message TextStyle {
+    string   content        = 1;
+    TextFont font           = 2;
+    string   transform      = 3;
+    string   color          = 4;
+    string   align          = 5;
+    double   line_height    = 6;
+    double   letter_spacing = 7;
+    string   white_space    = 8;
+    string   decoration     = 9;
+}
+
+message ImageFilters {
+    optional double brightness = 1;
+    optional double contrast   = 2;
+    optional double grayscale  = 3;
+    optional double blur       = 4;
+}
+
+message ImageStyle {
+    string         src      = 1;
+    string         alt      = 2;
+    string         fit      = 3;
+    string         position = 4;
+    ImageFilters   filters  = 5;
+}
+
+message MediaStyle {
+    string src      = 1;
+    bool   autoplay = 2;
+    bool   loop     = 3;
+    bool   muted    = 4;
+    bool   controls = 5;
+}
+
+message InputStyle {
+    string value       = 1;
+    string placeholder = 2;
+    bool   disabled    = 3;
+    bool   required    = 4;
+}
+
+message IconStyle {
+    string name  = 1;
+    double size  = 2;
+    string color = 3;
+}
+
+message ContainerStyle {
+    string           background = 1;
+    string           padding    = 2; // JSON-encoded number | BoxEdges
+    optional BorderStyle border = 3;
+    string           radius     = 4; // JSON-encoded number | corner object
+}
+
+message SvgTextContent {
+    TextStyle text       = 1;
+    string    placement_h = 2;
+    string    placement_v = 3;
+    double    padding    = 4;
+}
+
+message SvgStroke {
+    string color = 1;
+    double width = 2;
+    string style = 3;
+}
+
+message SvgArrow {
+    string start = 1;
+    string end   = 2;
+}
+
+message SvgStyle {
+    string              fill         = 1;
+    optional SvgStroke  stroke       = 2;
+    double              opacity      = 3;
+    string              radius       = 4; // JSON-encoded
+    optional SvgArrow   arrow        = 5;
+    optional SvgTextContent text_content = 6;
+}
+
+// ============================================================
+// GEOMETRY
+// ============================================================
+
+message Point {
+    double x = 1;
+    double y = 2;
+}
+
+message PathCommand {
+    string type = 1; // "M"|"L"|"C"|"Q"|"Z"
+    // M, L
+    optional double x  = 2;
+    optional double y  = 3;
+    // C
+    optional double x1 = 4;
+    optional double y1 = 5;
+    optional double x2 = 6;
+    optional double y2 = 7;
+    // Q
+    // x1, y1, x, y reused above
+}
+
+message Geometry {
+    string type = 1; // "rect"|"circle"|"ellipse"|"line"|"polygon"|"star"|"arrow"|"path"|"hotspot"
+
+    // rect / hotspot
+    optional double width  = 2;
+    optional double height = 3;
+    // circle
+    optional double r  = 4;
+    // ellipse
+    optional double rx = 5;
+    optional double ry = 6;
+    // line / arrow
+    optional double x1 = 7;
+    optional double y1 = 8;
+    optional double x2 = 9;
+    optional double y2 = 10;
+    // polygon
+    repeated Point points = 11;
+    // star
+    optional int32  star_points    = 12;
+    optional double inner_radius   = 13;
+    optional double outer_radius   = 14;
+    // path
+    repeated PathCommand commands  = 15;
+    // arrow from/to
+    optional Point from = 16;
+    optional Point to   = 17;
+}
+
+// ============================================================
+// ELEMENTS
+// ============================================================
+
+message ResponsiveDelta {
+    string breakpoint = 1;
+    string layout_json  = 2; // partial Layout as JSON
+    string style_json   = 3; // partial style as JSON
+    string effects_json = 4; // partial Effects as JSON
+}
+
+// Base fields shared by all element kinds
+message BaseElement {
+    string   id      = 1;
+    string   name    = 2;
+    string   kind    = 3; // "flatHtml"|"container"|"component"|"svg"
+    string   type    = 4;
+    string   parent_id = 5;
+    Layout   layout  = 6;
+    Effects  effects = 7;
+    Interaction interaction = 8;
+    repeated ResponsiveDelta responsive = 9;
+}
+
+message FlatHtmlElement {
+    BaseElement base  = 1;
+    string      style_json = 2; // TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle as JSON
+}
+
+message ContainerElement {
+    BaseElement base     = 1;
+    ContainerStyle style = 2;
+    repeated string children = 3;
+    string display_mode  = 4; // "block"|"flex"|"grid"
+    string display_config_json = 5; // FlexDisplay | GridDisplay as JSON, empty if block
+    string role          = 6;
+}
+
+message ComponentElement {
+    BaseElement base     = 1;
+    string      component_id = 2;
+    repeated string children = 3;
+    string      props_json   = 4; // Record<string, unknown> as JSON
+    string      slots_json   = 5; // Record<string, string[]> as JSON
+}
+
+message SvgElement {
+    BaseElement base     = 1;
+    SvgStyle    style    = 2;
+    Geometry    geometry = 3;
+}
+
+message Element {
+    oneof kind {
+        FlatHtmlElement  flat_html  = 1;
+        ContainerElement container  = 2;
+        ComponentElement component  = 3;
+        SvgElement       svg        = 4;
+    }
+}
+
+// ============================================================
+// STAGE / PAGE
+// ============================================================
+
+message StageDisplay {
+    oneof display {
+        GridDisplay grid = 1;
+        FlexDisplay flex = 2;
+    }
+}
+
+message Stage {
+    double       width      = 1;
+    double       height     = 2;
+    string       background = 3;
+    StageDisplay display    = 4;
+}
+
+message LastEditedBy {
+    string user_id = 1;
+    string name    = 2;
+}
+
+message PageMetadata {
+    string        title       = 1;
+    string        description = 2;
+    int64         duration    = 3;
+    int32         version     = 4;
+    int64         created_at  = 5;
+    int64         updated_at  = 6;
+    LastEditedBy  last_edited_by = 7;
+}
+
+message Page {
+    string   id      = 1;
+    bool     visible = 2;
+    Stage    stage   = 3;
+    // Elements stored as flat map — encoded as repeated pairs
+    repeated ElementEntry elements = 4;
+    repeated string        root_ids = 5;
+    PageMetadata           metadata = 6;
+}
+
+message ElementEntry {
+    string  id      = 1;
+    Element element = 2;
+}
+
+// ============================================================
+// COMPONENT DEFINITION
+// ============================================================
+
+message ComponentPropSchema {
+    string type          = 1;
+    string default_value = 2; // JSON-encoded
+    bool   required      = 3;
+    string description   = 4;
+}
+
+message ComponentDefinition {
+    string   id         = 1;
+    string   name       = 2;
+    string   version    = 3;
+    string   source     = 4; // "local" | "marketplace"
+    string   author_id  = 5;
+    repeated string  root_ids   = 6;
+    repeated ElementEntry elements = 7;
+    map<string, ComponentPropSchema> props = 8;
+    int64    created_at = 9;
+    int64    updated_at = 10;
+    // Marketplace fields (only set when source == "marketplace")
+    string   marketplace_publisher_id = 11;
+    string   marketplace_package_id   = 12;
+    string   marketplace_pinned_version = 13;
+    string   marketplace_origin_url   = 14;
+}
+
+// ============================================================
+// HISTORY / DIFFS
+// ============================================================
+
+message ScopedDiff {
+    string scope_kind = 1; // matches DirtyScope.kind
+    string scope_id   = 2; // empty for non-id scopes
+    string payload    = 3; // JSON-encoded state snapshot of the scope
+    int64  created_at = 4;
+    string session_id = 5;
+}
+
+message UndoEntry {
+    string action_id     = 1;
+    string label         = 2;
+    string scope_kind    = 3;
+    string scope_id      = 4;
+    string before        = 5; // JSON snapshot
+    string after         = 6; // JSON snapshot
+    int64  created_at    = 7;
+    bool   flushed_to_wal = 8;
+}
+
+// ============================================================
+// PROJECT DOCUMENT (top-level blob stored in document table)
+// ============================================================
+
+message AuthorProto {
+    string user_id = 1;
+    string name    = 2;
+    string email   = 3;
+    string role    = 4;
+}
+
+message PageRef {
+    string name  = 1;
+    string id    = 2;
+    int32  order = 3;
+}
+
+message LessonRef {
+    string name  = 1;
+    string id    = 2;
+    int32  order = 3;
+}
+
+message ModuleRef {
+    string name  = 1;
+    string id    = 2;
+    int32  order = 3;
+}
+
+message LessonMetadata {
+    string title                    = 1;
+    string description              = 2;
+    int64  duration                 = 3;
+    string url                      = 4;
+    int32  version                  = 5;
+    int64  created_at               = 6;
+    int64  updated_at               = 7;
+    LastEditedBy last_edited_by     = 8;
+    int64  estimated_completion_time = 9;
+    bool   required                 = 10;
+    bool   auto_complete            = 11;
+    repeated string prerequisites   = 12;
+    repeated string tags            = 13;
+}
+
+message Lesson {
+    string           id       = 1;
+    string           type     = 2; // "activity" | "assessment"
+    bool             visible  = 3;
+    repeated PageRef pages    = 4;
+    repeated string  cf_node_ids = 5;
+    string           summary  = 6;
+    LessonMetadata   metadata = 7;
+}
+
+message ModuleMetadata {
+    string title                    = 1;
+    string description              = 2;
+    int64  duration                 = 3;
+    string url                      = 4;
+    int32  version                  = 5;
+    int64  created_at               = 6;
+    int64  updated_at               = 7;
+    LastEditedBy last_edited_by     = 8;
+    string overview                 = 9;
+    int64  estimated_completion_time = 10;
+    repeated string prerequisites   = 11;
+    repeated string unlock_conditions = 12;
+    repeated string tags            = 13;
+}
+
+message Module {
+    string             id       = 1;
+    bool               visible  = 2;
+    repeated LessonRef lessons  = 3;
+    string             notes    = 4;
+    repeated string    cf_node_ids = 5;
+    ModuleMetadata     metadata = 6;
+}
+
+message Pricing {
+    string type     = 1;
+    double amount   = 2;
+    string currency = 3;
+}
+
+message CourseMetadata {
+    string   title                = 1;
+    string   subtitle             = 2;
+    string   description          = 3;
+    string   category             = 4;
+    string   target_audience      = 5;
+    string   difficulty           = 6;
+    int64    duration             = 7;
+    repeated string prerequisites = 8;
+    repeated string tags          = 9;
+    string   cover_image          = 10;
+    string   author               = 11;
+    repeated string languages     = 12;
+    string   visibility           = 13;
+    string   licensing            = 14;
+    Pricing  pricing              = 15;
+    string   release_schedule     = 16;
+    repeated string completion_requirements = 17;
+    string   url                  = 18;
+    int64    published_at         = 19; // 0 = pending
+    int32    version              = 20;
+    int64    created_at           = 21;
+    int64    updated_at           = 22;
+    LastEditedBy last_edited_by   = 23;
+}
+
+message Course {
+    string             id          = 1;
+    repeated ModuleRef modules     = 2;
+    repeated string    cf_node_ids = 3;
+    CourseMetadata     metadata    = 4;
+}
+
+message MediaAsset {
+    string id         = 1;
+    string name       = 2;
+    string type       = 3;
+    string url        = 4;
+    string hash       = 5;
+    int64  size_bytes = 6;
+    int64  created_at = 7;
+}
+
+message DslTrigger {
+    string id         = 1;
+    string scope      = 2;
+    string page_id    = 3;
+    string dsl_source = 4;
+    bool   enabled    = 5;
+    int64  created_at = 6;
+    int64  updated_at = 7;
+    string last_error = 8;
+}
+
+message ActionScript {
+    string id          = 1;
+    string name        = 2;
+    string scope       = 3;
+    string code_ts     = 4;
+    string compiled_js = 5;
+}
+
+// Top-level document blob — persisted in the document table
+message ProjectDocument {
+    int32   project_version  = 1;
+    string  project_id       = 2;
+    string  project_name     = 3;
+    int64   created_at       = 4;
+    int64   updated_at       = 5;
+    repeated AuthorProto authors = 6;
+    Course  course           = 7;
+    repeated Module  modules = 8;
+    repeated Lesson  lessons = 9;
+    repeated ComponentDefinition components = 10;
+    repeated MediaAsset media   = 11;
+    repeated DslTrigger dsl_triggers = 12;
+    repeated ActionScript action_scripts = 13;
+}
