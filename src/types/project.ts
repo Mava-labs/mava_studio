@@ -191,6 +191,8 @@ export type ProjectData = {
     modulesById: Record<string, Module>;
     lessonsById: Record<string, Lesson>;
     pagesById: Record<string, Page>;
+    componentLibrary: Record<string, Element>;
+    mediaLibrary: Record<string, { id: string; name: string; type: string; url: string }>;
     dslTriggers: Record<string, DSLTriggerDocument>;
     actionScripts : Record<string, ScriptDef>;
 };

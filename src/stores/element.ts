@@ -1,38 +1,45 @@
-import { defineStore } from "pinia";
-import { ref } from "vue";
-import { usePagesStore } from "./pages";
+/**
+ * element.ts
+ * Pinia store — element tree mutations, DOM mounting, and selection.
+ *
+ * Changes from original:
+ *   - pushUndo() called on addElement, updateElement, removeElement
+ *   - restoreSnapshot() added — called by useUndoRedo dispatcher
+ *   - commitPageToCache() replaces direct pagesCache mutation
+ *     so dirty marking flows through pagesStore correctly
+ */
 
+import { defineStore } from 'pinia';
+import { ref } from 'vue';
+import { usePagesStore } from './pages';
+import { useProjectMetadataStore } from './projectMetadata';
 import type {
-    Element, ContainerElement, SvgElement, FlatHtmlElement, ContainerStyle,
-    Layout, Effects, TextStyle, ImageStyle, SvgStyle,
-} from "../types/element";
-import type { Page } from "../types/project";
-
+    Element, ContainerElement, SvgElement, FlatHtmlElement,
+    ContainerStyle, Layout, Effects,
+    TextStyle, ImageStyle, SvgStyle,
+} from '../types/element';
+import type { Page } from '../types/project';
 import {
     mountElement, unmountElement, getMountedNode,
     applyLayoutToNode, applyEffectsToNode, applyTextStyleToNode,
     applyImageStyleToNode, applySvgStyleToNode, applyContainerStyleToNode,
-} from "../utils/element.mounter";
+} from '../utils/element.mounter';
 import {
     buildText, buildButton, buildImage, buildInput, buildTextarea, buildLabel,
-    buildDiv, buildSection, buildArticle, buildHeader, buildFooter, buildNav, buildForm, buildList,
-    buildRect, buildCircle, buildEllipse, buildLine, buildPath,
-} from "../utils/element.builder";
+    buildDiv, buildSection, buildArticle, buildHeader, buildFooter, buildNav,
+    buildForm, buildList, buildRect, buildCircle, buildEllipse, buildLine, buildPath,
+} from '../utils/element.builder';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-/**
- * Every type string the insert panel can emit.
- * Matches the 'type' fields in the panel's categories array exactly.
- */
+/* ============================================================
+   TYPES (unchanged from original)
+   ============================================================ */
+
 export type InsertableType =
-    // SVG/shapes
     | 'line' | 'rectangle' | 'square' | 'circle' | 'ellipse'
     | 'triangle' | 'hexagon' | 'star' | 'arrow' | 'hotspot' | 'path'
-    // flatHtml
     | 'text' | 'image' | 'video' | 'audio' | 'iframe'
     | 'button' | 'input' | 'select' | 'checkbox' | 'radio'
     | 'textarea' | 'label' | 'code'
-    // containers
     | 'form' | 'list' | 'table' | 'div'
     | 'section' | 'article' | 'header' | 'footer' | 'nav';
 
@@ -42,32 +49,26 @@ export interface AddElementOptions {
     position?: InsertPosition;
 }
 
-/**
- * Granular patch passed to updateElement.
- * Each key is optional — only what you pass gets merged and synced.
- */
 export interface ElementPatch {
-    style?: Partial<Record<string, unknown>>;
-    effects?: Partial<Effects>;
+    style?:    Partial<Record<string, unknown>>;
+    effects?:  Partial<Effects>;
     layout?: {
-        size?: Partial<Layout['size']>;
-        positioning?: Partial<Layout['positioning']>;
-        transform?: Partial<NonNullable<Layout['transform']>>;
-        visible?: boolean;
-        locked?: boolean;
+        size?:         Partial<Layout['size']>;
+        positioning?:  Partial<Layout['positioning']>;
+        transform?:    Partial<NonNullable<Layout['transform']>>;
+        visible?:      boolean;
+        locked?:       boolean;
     };
 }
 
-// ─── Inline helpers ───────────────────────────────────────────────────────────
+/* ============================================================
+   INLINE HELPERS (unchanged from original)
+   ============================================================ */
 
 function uid(): string { return Math.random().toString(36).slice(2, 9); }
 
-const defaultLayout = () => ({
-    positioning: { mode: 'flow' as const },
-    size: { width: 'auto' as const, height: 'auto' as const },
-    visible: true, locked: false,
-});
-const defaultEffects = () => ({ opacity: 1, blur: 0 });
+const defaultLayout    = () => ({ positioning: { mode: 'flow' as const }, size: { width: 'auto' as const, height: 'auto' as const }, visible: true, locked: false });
+const defaultEffects   = () => ({ opacity: 1, blur: 0 });
 const defaultInteraction = () => ({ triggers: [], animations: [] });
 
 function buildFlatHtmlGeneric(type: FlatHtmlElement['type']): FlatHtmlElement {
@@ -89,41 +90,35 @@ function buildContainerGeneric(type: ContainerElement['type'], name: string): Co
     };
 }
 
-// ─── Builder dispatch ─────────────────────────────────────────────────────────
-
 function buildElement(type: InsertableType): Element {
     switch (type) {
-        case 'text': return buildText();
-        case 'button': return buildButton();
-        case 'image': return buildImage();
-        case 'input': return buildInput();
+        case 'text':     return buildText();
+        case 'button':   return buildButton();
+        case 'image':    return buildImage();
+        case 'input':    return buildInput();
         case 'textarea': return buildTextarea();
-        case 'label': return buildLabel();
+        case 'label':    return buildLabel();
         case 'checkbox':
         case 'radio':
-        case 'select': return buildInput();
-        case 'video': return buildFlatHtmlGeneric('video');
-        case 'audio': return buildFlatHtmlGeneric('audio');
-        case 'iframe': return buildFlatHtmlGeneric('video'); // closest flatHtml type
-        case 'code': return buildFlatHtmlGeneric('textarea');
-        case 'div': return buildDiv();
-        case 'section': return buildSection();
-        case 'article': return buildArticle();
-        case 'header': return buildHeader();
-        case 'footer': return buildFooter();
-        case 'nav': return buildNav();
-        case 'form': return buildForm();
-        case 'list': return buildList();
-        case 'table': return buildContainerGeneric('div', 'Table');
-
-        // SVG — direct builders
-        case 'line': return buildLine();
-        case 'path': return buildPath();
-        case 'circle': return buildCircle();
-        case 'ellipse': return buildEllipse();
+        case 'select':   return buildInput();
+        case 'video':    return buildFlatHtmlGeneric('video');
+        case 'audio':    return buildFlatHtmlGeneric('audio');
+        case 'iframe':   return buildFlatHtmlGeneric('video');
+        case 'code':     return buildFlatHtmlGeneric('textarea');
+        case 'div':      return buildDiv();
+        case 'section':  return buildSection();
+        case 'article':  return buildArticle();
+        case 'header':   return buildHeader();
+        case 'footer':   return buildFooter();
+        case 'nav':      return buildNav();
+        case 'form':     return buildForm();
+        case 'list':     return buildList();
+        case 'table':    return buildContainerGeneric('div', 'Table');
+        case 'line':     return buildLine();
+        case 'path':     return buildPath();
+        case 'circle':   return buildCircle();
+        case 'ellipse':  return buildEllipse();
         case 'rectangle': return buildRect();
-
-        // SVG — composed from existing builders
         case 'square': {
             const el = buildRect() as SvgElement;
             el.name = 'Square'; el.geometry = { type: 'rect', width: 100, height: 100 };
@@ -168,7 +163,9 @@ function buildElement(type: InsertableType): Element {
     }
 }
 
-// ─── Insertion helpers ────────────────────────────────────────────────────────
+/* ============================================================
+   INSERTION HELPERS (unchanged from original)
+   ============================================================ */
 
 type InsertionDescriptor =
     | { target: 'root' }
@@ -191,18 +188,12 @@ function resolveInsertion(page: Page, activeId: string | null, position: InsertP
     if (!activeId) return { target: 'root' };
     const selected = page.elements[activeId];
     if (!selected) return { target: 'root' };
-
-    // Container selected + default 'after' = absorb as child
     if (selected.kind === 'container' && position === 'after') return { target: 'child', parentId: selected.id };
-
-    // flatHtml / SVG / or forced 'before' on container = sibling
     const parent = findParent(page.elements, activeId);
-
     if (parent) {
         const idx = parent.children.indexOf(activeId);
         return { target: 'sibling', parentId: parent.id, index: position === 'before' ? idx : idx + 1 };
     }
-
     const rootIdx = page.rootIds.indexOf(activeId);
     return { target: 'rootSibling', index: position === 'before' ? rootIdx : rootIdx + 1 };
 }
@@ -210,7 +201,7 @@ function resolveInsertion(page: Page, activeId: string | null, position: InsertP
 function applyInsertion(page: Page, descriptor: InsertionDescriptor, newElement: Element): Page {
     const elements = { ...page.elements, [newElement.id]: newElement };
     switch (descriptor.target) {
-        case 'root': return { ...page, elements, rootIds: [...page.rootIds, newElement.id] };
+        case 'root':        return { ...page, elements, rootIds: [...page.rootIds, newElement.id] };
         case 'rootSibling': return { ...page, elements, rootIds: spliceIn(page.rootIds, newElement.id, descriptor.index) };
         case 'child': {
             const p = page.elements[descriptor.parentId] as ContainerElement;
@@ -223,15 +214,9 @@ function applyInsertion(page: Page, descriptor: InsertionDescriptor, newElement:
     }
 }
 
-/**
- * Mount the built node into the live DOM at the position described by the descriptor.
- * Uses the PRE-insertion page for sibling index lookups so index references are correct.
- */
 function mountAtPosition(
-    descriptor: InsertionDescriptor,
-    newElement: Element,
-    prePage: Page, // page state BEFORE insertion (for sibling index lookups)
-    stageNode: HTMLElement, elementMap: Map<string, Element>,
+    descriptor: InsertionDescriptor, newElement: Element,
+    prePage: Page, stageNode: HTMLElement, elementMap: Map<string, Element>,
 ): HTMLElement {
     const node = mountElement(newElement, elementMap);
     switch (descriptor.target) {
@@ -258,37 +243,37 @@ function mountAtPosition(
     return node;
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
+/* ============================================================
+   STORE
+   ============================================================ */
 
 export const useElementStore = defineStore('element', () => {
-    const pages = usePagesStore();
+
+    const pages   = usePagesStore();
+    const project = useProjectMetadataStore();
 
     const activeElementId = ref<string | null>(null);
+    const stageNode       = ref<HTMLElement | null>(null);
+    const nodeIndex       = ref<Record<string, Record<string, HTMLElement>>>({});
 
-    /**
-     * The live stage DOM node. Set once by the Stage component via setStageNode().
-     * Stored here so the insert panel and other consumers don't need to pass it around.
-     */
-    const stageNode = ref<HTMLElement | null>(null);
-
-    /** Per-page lookup: pageId → { elementId → HTMLElement } */
-    const nodeIndex = ref<Record<string, Record<string, HTMLElement>>>({});
-
-    // ── Stage registration ────────────────────────────────────────────────────
+    /* ----------------------------------------------------------
+       STAGE REGISTRATION
+    ---------------------------------------------------------- */
 
     function setStageNode(node: HTMLElement): void { stageNode.value = node; }
 
-    // ── Selection ─────────────────────────────────────────────────────────────
+    /* ----------------------------------------------------------
+       SELECTION
+    ---------------------------------------------------------- */
 
     function setActiveElement(id: string | null): void { activeElementId.value = id; }
 
-    // ── Mount page ────────────────────────────────────────────────────────────
-    /**
-     * Mount all elements of the active page into the stage.
-     * Called by the Stage component after a page is loaded and the stage node is ready.
-     */
+    /* ----------------------------------------------------------
+       MOUNT PAGE
+    ---------------------------------------------------------- */
+
     function mountPage(): void {
-        const page = pages.getActivePageData();
+        const page  = pages.getActivePageData();
         const stage = stageNode.value;
         if (!page || !stage) return;
         stage.innerHTML = '';
@@ -301,27 +286,37 @@ export const useElementStore = defineStore('element', () => {
         }
     }
 
-    // ── updateElement ─────────────────────────────────────────────────────────
+    /* ----------------------------------------------------------
+       SNAPSHOT RESTORE (called by useUndoRedo for page-scoped actions)
+    ---------------------------------------------------------- */
 
     /**
-     * Merge a partial patch into the element data and immediately apply
-     * the changed properties to the live DOM node — no remount needed.
-     *
-     * Called by every style panel sub-component instead of direct mutation.
-     *
-     * @example
-     * elementStore.updateElement(id, { effects: { opacity: 0.5 } })
-     * elementStore.updateElement(id, { style: { color: '#ff0000' } })
-     * elementStore.updateElement(id, { layout: { size: { width: 300 } } })
+     * Restore a page to a prior snapshot state.
+     * Replaces the cache entry and remounts the stage to reflect the restored state.
+     * Called by useUndoRedo when scope.kind === 'page'.
      */
+    function restoreSnapshot(pageId: string, snapshot: Page): void {
+        pages.restoreSnapshot(pageId, snapshot);
+        // If this page is currently active, remount the stage
+        if (pages.activePageId === pageId) {
+            mountPage();
+        }
+    }
+
+    /* ----------------------------------------------------------
+       UPDATE ELEMENT
+    ---------------------------------------------------------- */
+
     function updateElement(elementId: string, patch: ElementPatch): void {
         const page = pages.getActivePageData();
         if (!page) return;
         const el = page.elements[elementId];
         if (!el) return;
 
-        // ── Merge data ────────────────────────────────────────────────────────
+        // Capture before state for undo
+        const before = JSON.stringify(page);
 
+        // ── Merge data ────────────────────────────────────────
         let updated = { ...el };
 
         if (patch.effects) {
@@ -329,56 +324,47 @@ export const useElementStore = defineStore('element', () => {
         }
 
         if (patch.style) {
-            updated = {
-                ...updated,
-                style: { ...(updated.style as Record<string, unknown>), ...patch.style },
-            };
+            updated = { ...updated, style: { ...(updated.style as Record<string, unknown>), ...patch.style } };
         }
 
         if (patch.layout) {
             const cur = updated.layout;
-            const lp = patch.layout;
-
-            const size = lp.size
-                ? { ...cur.size, ...lp.size }
-                : cur.size;
-
+            const lp  = patch.layout;
+            const size = lp.size ? { ...cur.size, ...lp.size } : cur.size;
             const positioning: Layout['positioning'] = lp.positioning
                 ? (lp.positioning.mode === 'flow'
                     ? { mode: 'flow' }
                     : { ...cur.positioning, ...lp.positioning } as Layout['positioning'])
                 : cur.positioning;
-
-            const transform = lp.transform
-                ? { ...(cur.transform ?? {}), ...lp.transform }
-                : cur.transform;
-
+            const transform = lp.transform ? { ...(cur.transform ?? {}), ...lp.transform } : cur.transform;
             updated = {
                 ...updated,
                 layout: {
                     ...cur,
                     ...(lp.visible !== undefined && { visible: lp.visible }),
-                    ...(lp.locked !== undefined && { locked: lp.locked }),
+                    ...(lp.locked  !== undefined && { locked:  lp.locked }),
                     size, positioning, transform,
                 },
             };
         }
 
-        // ── Write to cache ────────────────────────────────────────────────────
+        // ── Commit to cache (marks dirty) ─────────────────────
+        const updatedPage = { ...page, elements: { ...page.elements, [elementId]: updated } };
+        pages.commitPageToCache(updatedPage);
 
-        pages.pagesCache[page.id] = {
-            ...page,
-            elements: { ...page.elements, [elementId]: updated },
-        };
+        // ── Push undo ─────────────────────────────────────────
+        project.pushUndo({
+            label:  `Edit ${el.name}`,
+            scope:  { kind: 'page', id: page.id },
+            before,
+            after:  JSON.stringify(updatedPage),
+        });
 
-        // ── Surgical DOM sync ─────────────────────────────────────────────────
-
+        // ── Surgical DOM sync ─────────────────────────────────
         const node = getMountedNode(elementId);
         if (!node) return;
-
         if (patch.effects) applyEffectsToNode(node, updated.effects);
-        if (patch.layout) applyLayoutToNode(node, updated.layout);
-
+        if (patch.layout)  applyLayoutToNode(node, updated.layout);
         if (patch.style) {
             switch (updated.kind) {
                 case 'flatHtml': {
@@ -399,42 +385,57 @@ export const useElementStore = defineStore('element', () => {
         }
     }
 
-    // ── Add element ───────────────────────────────────────────────────────────
-    /**
-     * Build a new element, insert it into page data, mount it into the DOM, and select it.
-     * The insert panel calls this with just the type — no stageNode arg needed.
-     */
+    /* ----------------------------------------------------------
+       ADD ELEMENT
+    ---------------------------------------------------------- */
+
     function addElement(type: InsertableType, options: AddElementOptions = {}): Element | null {
-        const page = pages.getActivePageData();
+        const page  = pages.getActivePageData();
         const stage = stageNode.value;
         if (!page || !stage) return null;
 
-        const position = options.position ?? 'after';
+        // Capture before state for undo
+        const before = JSON.stringify(page);
+
+        const position   = options.position ?? 'after';
         const newElement = buildElement(type);
         const descriptor = resolveInsertion(page, activeElementId.value, position);
         const updatedPage = applyInsertion(page, descriptor, newElement);
 
-        // Commit updated page into cache
-        pages.pagesCache[page.id] = updatedPage;
+        // Commit to cache (marks dirty)
+        pages.commitPageToCache(updatedPage);
 
+        // Mount DOM
         const elementMap = new Map(Object.entries(updatedPage.elements));
-
-        // Mount — pass original `page` for sibling lookups, not updatedPage
         const node = mountAtPosition(descriptor, newElement, page, stage, elementMap);
-
         if (!nodeIndex.value[page.id]) nodeIndex.value[page.id] = {};
         nodeIndex.value[page.id][newElement.id] = node;
+
+        // Push undo
+        project.pushUndo({
+            label:  `Add ${newElement.name}`,
+            scope:  { kind: 'page', id: page.id },
+            before,
+            after:  JSON.stringify(updatedPage),
+        });
 
         setActiveElement(newElement.id);
         return newElement;
     }
 
-    // ── Remove element ────────────────────────────────────────────────────────
+    /* ----------------------------------------------------------
+       REMOVE ELEMENT
+    ---------------------------------------------------------- */
 
     function removeElement(elementId: string): void {
         const page = pages.getActivePageData();
         if (!page) return;
 
+        // Capture before state for undo
+        const before = JSON.stringify(page);
+        const elementName = page.elements[elementId]?.name ?? 'Element';
+
+        // Collect all ids to remove (element + descendants)
         const toRemove = new Set<string>();
         const collect = (id: string) => {
             toRemove.add(id);
@@ -444,6 +445,7 @@ export const useElementStore = defineStore('element', () => {
         };
         collect(elementId);
 
+        // Remove DOM nodes
         for (const id of toRemove) {
             const n = getMountedNode(id);
             n?.parentElement?.removeChild(n);
@@ -451,25 +453,47 @@ export const useElementStore = defineStore('element', () => {
             delete nodeIndex.value[page.id]?.[id];
         }
 
+        // Build updated page state
         const elements = { ...page.elements };
         for (const id of toRemove) delete elements[id];
-        const rootIds = page.rootIds.filter((id) => !toRemove.has(id));
+        const rootIds = page.rootIds.filter(id => !toRemove.has(id));
         for (const el of Object.values(elements)) {
             if (el.kind === 'container') {
                 const c = el as ContainerElement;
-                const f = c.children.filter((id) => !toRemove.has(id));
-                if (f.length !== c.children.length) elements[el.id] = { ...c, children: f };
+                const filtered = c.children.filter(id => !toRemove.has(id));
+                if (filtered.length !== c.children.length)
+                    elements[el.id] = { ...c, children: filtered };
             }
         }
 
-        pages.pagesCache[page.id] = { ...page, elements, rootIds };
-        if (activeElementId.value && toRemove.has(activeElementId.value)) setActiveElement(null);
+        const updatedPage = { ...page, elements, rootIds };
+        pages.commitPageToCache(updatedPage);
+
+        // Push undo
+        project.pushUndo({
+            label:  `Delete ${elementName}`,
+            scope:  { kind: 'page', id: page.id },
+            before,
+            after:  JSON.stringify(updatedPage),
+        });
+
+        if (activeElementId.value && toRemove.has(activeElementId.value))
+            setActiveElement(null);
     }
 
+    /* ----------------------------------------------------------
+       PUBLIC API
+    ---------------------------------------------------------- */
+
     return {
-        activeElementId, nodeIndex,
-        setStageNode, setActiveElement,
-        mountPage, updateElement,
-        addElement, removeElement,
+        activeElementId,
+        nodeIndex,
+        setStageNode,
+        setActiveElement,
+        mountPage,
+        updateElement,
+        addElement,
+        removeElement,
+        restoreSnapshot,
     };
 });
