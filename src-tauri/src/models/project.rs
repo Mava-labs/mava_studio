@@ -294,3 +294,13 @@ pub struct LoadProjectResult {
     pub project_data: ProjectData,
     pub session_lock: SessionLock,
 }
+
+/// Returned by copy_project_to (Save As).
+/// Contains the updated project data (with new archive path)
+/// and a fresh session lock against the copied file.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyProjectResult {
+    pub project_data: ProjectData,
+    pub session_lock: SessionLock,
+}

@@ -1,25 +1,38 @@
 use serde::{Deserialize, Serialize};
 
-/// Matches the UndoAction type on the TypeScript side.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UndoAction {
-    pub id:            String,
-    pub label:         String,
-    pub scope:         ScopeRef,
-    pub before:        String, // JSON snapshot
-    pub after:         String, // JSON snapshot
-    pub created_at:    i64,
-    pub flushed_to_wal: bool,
-}
-
-/// Serialisable scope reference — mirrors the DirtyScope discriminated union.
+/// Mirrors the TypeScript `DirtyScope` discriminated union.
+/// Used both as an incoming command argument and as a field on UndoAction.
+///
+/// TS sends e.g. { kind: 'module', id: 'abc' } or { kind: 'project' } (no id).
+/// The Option<String> on id handles both cases correctly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopeRef {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id:   Option<String>,
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+impl ScopeRef {
+    /// Returns the id as a str slice, or empty string for scopes without an id
+    /// (project, course, mediaLibrary, scripts, dslTriggers).
+    pub fn scope_id(&self) -> &str {
+        self.id.as_deref().unwrap_or("")
+    }
+}
+
+/// Matches the TypeScript `UndoAction` interface exactly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoAction {
+    pub id:             String,
+    pub label:          String,
+    pub scope:          ScopeRef,
+    pub before:         String, // JSON snapshot — may be empty if flushed and cleared
+    pub after:          String, // JSON snapshot — may be empty if flushed and cleared
+    pub created_at:     i64,
+    pub flushed_to_wal: bool,
 }
 
 /// A single WAL entry — the serialised state of a scope at a point in time.
@@ -33,7 +46,7 @@ pub struct ScopedDiff {
     pub session_id: String,
 }
 
-/// Row shape read from the history table.
+/// Row shape read from the history table — internal only, not sent to frontend.
 #[derive(Debug)]
 pub struct HistoryRow {
     pub id:         i64,
@@ -45,7 +58,7 @@ pub struct HistoryRow {
     pub session_id: String,
 }
 
-/// Row shape read from the snapshots table.
+/// Row shape read from the snapshots table — internal only.
 #[derive(Debug)]
 pub struct SnapshotRow {
     pub id:         i64,

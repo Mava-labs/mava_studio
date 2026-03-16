@@ -1196,5 +1196,6 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
 
         // ── Internal (Rust bridge / pagesStore) ────────────────
         _snapshot,
+        _hydrate,
     };
 });

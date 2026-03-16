@@ -15,7 +15,12 @@ use state::AppState;
 use tauri::Manager;
 
 use commands::{
-    project::{create_project, load_project, save_project, close_project, get_recent_projects},
+    project::{
+        create_project, load_project, save_project,
+        copy_project_to, close_project,
+        get_recent_projects, remove_recent_project,
+        reveal_in_explorer,
+    },
     pages::{load_page, save_page},
     history::{flush_scope_wal, autosave_scope, commit_snapshot, reconstruct_version},
     undo::{flush_undo_entry, load_undo_entry},
@@ -40,9 +45,6 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)
                 .expect("Failed to create app data directory");
 
-            // Initialise app-level SQLite on startup.
-            // block_on is safe here because setup() runs before the async
-            // runtime hands control to the event loop.
             let app_db = tauri::async_runtime::block_on(
                 db::open_app_db(&app_data_dir)
             ).expect("Failed to open app state database");
@@ -57,8 +59,11 @@ pub fn run() {
             create_project,
             load_project,
             save_project,
+            copy_project_to,
             close_project,
             get_recent_projects,
+            remove_recent_project,
+            reveal_in_explorer,
 
             // Pages
             load_page,

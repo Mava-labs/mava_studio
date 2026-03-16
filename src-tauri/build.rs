@@ -1,4 +1,5 @@
 fn main() {
+    tauri_build::build();
     // prost-build compiles .proto files to Rust structs.
     // Output goes to OUT_DIR (managed by Cargo, not a source directory).
     // The generated file is included via `include!(concat!(env!("OUT_DIR"), "/mava.rs"))`

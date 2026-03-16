@@ -30,7 +30,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(app_db: AppDb) -> Self {
-        Self {
+        Self { 
+            
             app_db,
             sessions: RwLock::new(HashMap::new()),
         }

@@ -67,7 +67,7 @@
     // import '../Terminal/monacoEnv';
     // import Terminal from '../Terminal/terminal.svelte';
 
-import { defineAsyncComponent, onMounted, ref, shallowRef, watch } from 'vue';
+import { onMounted, ref } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import SideNav from './components/SideNav.vue';
 import NavAssociates from './components/NavAssociates.vue';
@@ -81,7 +81,7 @@ import TemplateMode from './mods/templateMode.vue';
 import EmptyProject from './mods/emptyProject.vue';
 
 // DebugPanel removed per user preference
-import GlobalPalette from './components/GlobalPalette.vue';
+// import GlobalPalette from './components/GlobalPalette.vue';
 
 // import { currentModuleId, currentLessonId, currentPageId, deleteModule, deleteLesson, deletePage } from '../stores/project';
 // import '../stores/timelineOrchestrator';
