@@ -20,7 +20,6 @@
 import { ref, computed, readonly } from 'vue';
 import { useProjectMetadataStore } from '../stores/projectMetadata';
 import { usePagesStore } from '../stores/pages';
-import { useElementStore } from '../stores/element';
 import { useNotificationStore } from '../stores/notification';
 
 /* ============================================================
@@ -56,7 +55,6 @@ const activeTabId = ref<string | null>(null);
 export function useComponentEditor() {
     const project = useProjectMetadataStore();
     const pages = usePagesStore();
-    const elements = useElementStore();
     const notification = useNotificationStore();
 
     /* ----------------------------------------------------------
@@ -113,7 +111,6 @@ export function useComponentEditor() {
         const result = await pages.loadPage(tab.pageId);
         if (result === 'Error') return;
         activeTabId.value = tab.id;
-        elements.mountPage();
     }
 
     /* ----------------------------------------------------------

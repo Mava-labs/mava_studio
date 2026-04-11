@@ -5,8 +5,14 @@ import persistedstate from "pinia-plugin-persistedstate";
 import { createPinia } from "pinia";
 import { prepareTauriStorage } from "./utils/tauriStorage";
 
-await prepareTauriStorage();
+async function bootstrap() {
+	await prepareTauriStorage();
 
-const pinia = createPinia();
-pinia.use(persistedstate);
-createVaporApp(App).use(pinia).mount("#app");
+	const pinia = createPinia();
+	pinia.use(persistedstate);
+
+	const vaporRoot = App as Parameters<typeof createVaporApp>[0];
+	createVaporApp(vaporRoot).use(pinia).mount("#app");
+}
+
+void bootstrap();

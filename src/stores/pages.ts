@@ -83,6 +83,7 @@ class LruCache<K, V> {
 
     has(key: K): boolean { return this.map.has(key); }
     delete(key: K): void { this.map.delete(key); }
+    clear(): void { this.map.clear(); }
     keys(): K[] { return [...this.map.keys()]; }
     values(): V[] { return [...this.map.values()]; }
 
@@ -108,6 +109,7 @@ export const usePagesStore = defineStore('pages', () => {
     const pagesCache = ref<Record<string, Page>>({});
     const activePageId = ref<string | null>(null);
     const isLoadingPage = ref<boolean>(false);
+    const recentActiveIds = ref<string[]>([]);
 
     // Internal LRU — single source of truth, pagesCache is its reactive mirror
     const lru = new LruCache<string, Page>(LRU_MAX);
@@ -122,6 +124,10 @@ export const usePagesStore = defineStore('pages', () => {
     /** Sync the LRU state into the reactive Record. */
     function _syncCache() {
         pagesCache.value = lru.toRecord();
+    }
+
+    function _rememberActive(pageId: string) {
+        recentActiveIds.value = [...recentActiveIds.value.filter(id => id !== pageId), pageId];
     }
 
     /** Apply sane defaults to any page coming from disk or Rust. */
@@ -144,12 +150,12 @@ export const usePagesStore = defineStore('pages', () => {
     ---------------------------------------------------------- */
 
     function getPage(pageId: string): Page | null {
-        return lru.get(pageId) ?? null;
+        return pagesCache.value[pageId] ?? null;
     }
 
     function getActivePageData(): Page | null {
         if (!activePageId.value) return null;
-        return lru.get(activePageId.value) ?? null;
+        return pagesCache.value[activePageId.value] ?? null;
     }
 
     function getElementById(elementId: string): import('../types/element').Element | null {
@@ -172,6 +178,7 @@ export const usePagesStore = defineStore('pages', () => {
         if (lru.has(pageId)) {
             lru.get(pageId); // promotes to most-recent
             activePageId.value = pageId;
+            _rememberActive(pageId);
             _syncCache();
             return 'Ok';
         }
@@ -199,6 +206,7 @@ export const usePagesStore = defineStore('pages', () => {
             }
 
             activePageId.value = pageId;
+            _rememberActive(pageId);
             _syncCache();
             return 'Ok';
         } catch (err) {
@@ -249,6 +257,13 @@ export const usePagesStore = defineStore('pages', () => {
         await Promise.all(dirtyPageIds.map(savePage));
     }
 
+    function closeAll(){
+        activePageId.value = null
+        recentActiveIds.value = []
+        lru.clear()
+        _syncCache()
+    }
+
     /* ----------------------------------------------------------
        SNAPSHOT RESTORE (for useUndoRedo)
     ---------------------------------------------------------- */
@@ -270,9 +285,25 @@ export const usePagesStore = defineStore('pages', () => {
     ---------------------------------------------------------- */
 
     function unloadPage(pageId: string) {
+        const wasActive = activePageId.value === pageId;
         lru.delete(pageId);
+        recentActiveIds.value = recentActiveIds.value.filter(id => id !== pageId);
+
+        if (wasActive) {
+            const fallbackFromHistory = [...recentActiveIds.value].reverse().find(id => lru.has(id)) ?? null;
+            if (fallbackFromHistory) {
+                lru.get(fallbackFromHistory);
+                activePageId.value = fallbackFromHistory;
+                _rememberActive(fallbackFromHistory);
+            } else {
+                const keys = lru.keys();
+                const fallback = keys.length ? keys[keys.length - 1] : null;
+                activePageId.value = fallback;
+                if (fallback) _rememberActive(fallback);
+            }
+        }
+
         _syncCache();
-        if (activePageId.value === pageId) activePageId.value = null;
     }
 
     /* ----------------------------------------------------------
@@ -293,6 +324,7 @@ export const usePagesStore = defineStore('pages', () => {
         // Load / unload
         loadPage,
         unloadPage,
+        closeAll,
 
         // Write
         commitPageToCache,

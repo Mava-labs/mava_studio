@@ -17,6 +17,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, readonly } from 'vue';
 import { tauriStorage } from '../utils/tauriStorage';
+import { useLayoutStore } from './layout';
 
 /* ============================================================
    TYPES
@@ -45,7 +46,7 @@ const ZOOM_DEFAULT = 1.0;
    ============================================================ */
 
 export const useStageStore = defineStore('stage', () => {
-
+    const layoutStore = useLayoutStore()
     /* ----------------------------------------------------------
        STATE — VIEW MODE (persisted)
     ---------------------------------------------------------- */
@@ -54,6 +55,7 @@ export const useStageStore = defineStore('stage', () => {
 
     function setStage(key: StageKey) {
         currentStage.value = key;
+        if(key == 'empty') layoutStore.setActiveRightUtil(null)
     }
 
     /* ----------------------------------------------------------

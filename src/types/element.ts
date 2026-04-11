@@ -4,32 +4,57 @@ import { FlexDisplay, GridDisplay } from "./project";
    CORE LAYOUT & RESPONSIVE
    ============================================================ */
 
-export type Positioning =
-    | { mode: 'flow' }
-    | {
-        mode: 'absolute';
-        anchor: 'parent' | 'page';
-        x: number;
-        y: number;
-        zIndex: number;
-    };
+export type LayoutTransform = {
+    rotation?: number;
+    scaleX?: number;
+    scaleY?: number;
+};
+
+export type Spacing =
+    | string
+    | { top?: string; right?: string; bottom?: string; left?: string }
+
+export type Size =
+    | 'auto'
+    | 'hug'     // content-based
+    | 'fill'    // fill available space
+    | string    // '100px', '50%', etc
 
 export interface Layout {
-    positioning: Positioning;
+    mode: 'flow' | 'flex' | 'grid',
+    position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky',
+    transform?: LayoutTransform;
+    visible?: boolean;
+    locked?: boolean;
 
-    size: {
-        width: number | 'full' | 'auto';
-        height: number | 'full' | 'auto';
-    };
+    // spacing
+    padding?: Spacing
+    margin?: Spacing
+    gap?: string
 
-    transform?: {
-        rotation?: number;
-        scaleX?: number;
-        scaleY?: number;
-    };
+    // sizing
+    width?: Size
+    height?: Size
+    minWidth?: string
+    maxWidth?: string
+    minHeight?: string
+    maxHeight?: string
 
-    visible: boolean;
-    locked: boolean;
+    // flex only
+    direction?: 'row' | 'column'
+    justify?: string
+    align?: string
+    wrap?: boolean
+
+    // grid only
+    columns?: string
+
+    // positioned only
+    x?: string
+    y?: string
+    z?: number
+
+    overflow?: 'visible' | 'hidden' | 'auto'
 }
 
 /** Named breakpoint ids for responsive overrides. */
@@ -137,6 +162,7 @@ export interface Effects {
 export interface BaseElement<TStyle> {
     id: string;
     name: string;
+    attributes?: Record<string, unknown>;
 
     /** Structural family */
     kind: 'flatHtml' | 'container' | 'component' | 'svg';

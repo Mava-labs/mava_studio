@@ -1,12 +1,20 @@
 <script setup lang="ts" vapor>
-    import { computed, ref, nextTick, onMounted, onUnmounted } from "vue";
+    import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
     import ExplorerTree from "./explorerTree.vue";
-    import type { ExplorerNode } from "./fileTree";
+    import type { ExplorerNode } from "../../../utils/fileTree";
+
+    type ActiveExplorerPath = {
+        moduleId?: string;
+        lessonId?: string;
+        pageId?: string;
+    } | null;
 
     const props = defineProps<{
         node: ExplorerNode;
         depth: number;
-        activePath?: any;
+        activePath?: ActiveExplorerPath;
+        clipboardAction?: 'copy' | 'cut' | null;
+        clipboardNodeKind?: ExplorerNode['kind'] | null;
     }>();
 
     const emit = defineEmits<{
@@ -16,6 +24,14 @@
 
     const expanded = ref(props.node.kind !== "page");
     const isBranch = computed(() => Boolean(props.node.children?.length));
+
+    const isInActivePath = computed(() => {
+        if (!props.activePath?.pageId) return false;
+        if (props.node.kind === 'course') return true;
+        if (props.node.kind === 'module') return props.activePath.moduleId === props.node.id;
+        if (props.node.kind === 'lesson') return props.activePath.lessonId === props.node.id;
+        return false;
+    });
 
     // --- context menu ---
     const menuVisible = ref(false);
@@ -27,20 +43,39 @@
     const renameValue = ref("");
     const renameInputRef = ref<HTMLInputElement | null>(null);
 
+    const hasActivePageDescendant = computed(() => {
+        const activePageId = props.activePath?.pageId;
+        if (!activePageId) return false;
+
+        const walk = (node: ExplorerNode): boolean => {
+            if (node.kind === "page") return node.id === activePageId;
+            return (node.children ?? []).some(child => walk(child));
+        };
+
+        return walk(props.node);
+    });
+
+    const isDirectPageActive = computed(() => {
+        if (props.node.kind !== "page") return false;
+        return props.node.id === props.activePath?.pageId;
+    });
+
+    const isInheritedActive = computed(() => {
+        if (props.node.kind !== "module" && props.node.kind !== "lesson") return false;
+        return !expanded.value && hasActivePageDescendant.value;
+    });
+
     const isActive = computed(() => {
-        if (!props.activePath) return false;
-        switch (props.node.kind) {
-            case "module":
-                return props.node.id === props.activePath.moduleId;
-            case "lesson":
-                return props.node.id === props.activePath.lessonId;
-            case "page":
-                return props.node.id === props.activePath.pageId;
-            case "course":
-                return true;
-            default:
-                return false;
-        }
+        if (props.node.kind === "course") return true;
+        return isDirectPageActive.value || isInheritedActive.value;
+    });
+
+    const canPasteIntoNode = computed(() => {
+        if (!props.clipboardNodeKind) return false;
+        if (props.node.kind === "course") return props.clipboardNodeKind === "module";
+        if (props.node.kind === "module") return props.clipboardNodeKind === "lesson";
+        if (props.node.kind === "lesson") return props.clipboardNodeKind === "page";
+        return false;
     });
 
     const badgeClass = computed(() => {
@@ -91,6 +126,10 @@
         emit("nodeAction", { action, node: props.node });
     }
 
+    function handleCourseAction(action: string) {
+        emit("nodeAction", { action, node: props.node });
+    }
+
     function confirmRename() {
         const newName = renameValue.value.trim();
         isRenaming.value = false;
@@ -107,6 +146,16 @@
         if (menuVisible.value) closeMenu();
     }
 
+    watch(
+        () => props.activePath?.pageId,
+        () => {
+            if (!isBranch.value) return;
+            if (!isInActivePath.value) return;
+            expanded.value = true;
+        },
+        { immediate: true }
+    );
+
     onMounted(() => document.addEventListener("click", onDocumentClick));
     onUnmounted(() => document.removeEventListener("click", onDocumentClick));
 </script>
@@ -114,15 +163,17 @@
 <template>
     <div>
         <button type="button"
+            :data-explorer-page-id="props.node.kind === 'page' ? props.node.id : undefined"
             :style="{ paddingLeft: props.node.kind !== 'course' ? `${depth * 12 + 8}px` : '0px' }" 
             class="w-full flex items-center gap-2 rounded-mdy py-1.5 text-left border border-transparent transition-colors"
             :class="[
-                isActive && props.node.kind == 'page' ? 'bg-slate-800/80 border-slate-700 text-slate-50' : 'text-slate-200 hover:bg-slate-900/60',
-                props.node.kind == 'course' ? 'font-semibold text-indigo-300 capitalize ' : ''
+                isActive && props.node.kind !== 'course' ? 'bg-slate-800/80 border-slate-700 text-slate-50' : 'text-slate-200 hover:bg-slate-900/60',
+                props.node.kind == 'course' ? 'sticky top-0 z-20 bg-slate-900/95 font-semibold text-indigo-300 capitalize backdrop-blur-sm' : ''
             ]" 
             @click="handleClick"
-            @contextmenu.prevent.stop="handleContextMenu">
-            <span class="w-3 text-center text-[10px] text-slate-500" v-if="isBranch && props.node.kind != 'course'">
+            @contextmenu.prevent.stop="handleContextMenu"
+        >
+            <span class="w-3 shrink-0 text-center text-[10px] text-slate-500" v-if="isBranch && props.node.kind != 'course'">
                 <svg v-if="expanded" class="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true"
                     xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -134,11 +185,11 @@
                         d="m9 5 7 7-7 7" />
                 </svg>
             </span>
-            <span v-else class="w-3"></span>
+            <span v-else class="w-3 shrink-0"></span>
 
-            <span :class="props.node.kind !== 'course' ? `${badgeClass} w-2 h-2 rounded-full` : ''"  />
+            <span :class="props.node.kind !== 'course' ? `${badgeClass} w-2 h-2 rounded-full shrink-0` : ''"  />
 
-            <span v-if="!isRenaming" class="truncate text-sm">{{ node.name }}</span>
+            <span v-if="!isRenaming" class="min-w-0 flex-1 truncate text-sm">{{ node.name }}</span>
             <input
                 v-else
                 ref="renameInputRef"
@@ -149,17 +200,57 @@
                 @blur="confirmRename"
                 @click.stop
             />
+
+            <span v-if="props.node.kind === 'course'" class="ml-auto inline-flex items-center gap-1">
+                <button
+                    type="button"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                    title="New Module"
+                    @click.stop="handleCourseAction('new-module')"
+                >
+                    <svg class="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 12h14m-7 7V5" />
+                    </svg>
+                </button>
+                <button
+                    type="button"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                    title="Refresh Tree"
+                    @click.stop="handleCourseAction('refresh-tree')"
+                >
+                    <svg class="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4" />
+                    </svg>
+                </button>
+                <button
+                    v-if="canPasteIntoNode"
+                    type="button"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-slate-800"
+                    title="Paste"
+                    @click.stop="handleCourseAction('paste')"
+                >
+                    <svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h10M9 12h10M9 16h10M5 8h.01M5 12h.01M5 16h.01" />
+                    </svg>
+                </button>
+            </span>
         </button>
 
         <ExplorerTree v-if="node.children && expanded" :nodes="node.children" :depth="depth + 1"
             :active-path="activePath"
+            :clipboard-action="clipboardAction"
+            :clipboard-node-kind="clipboardNodeKind"
             @select="(payload) => emit('select', payload)"
             @node-action="(payload) => emit('nodeAction', payload)" />
 
         <!-- Context menu -->
         <div v-if="menuVisible" class="fixed inset-0 z-40" @click.stop="closeMenu" @contextmenu.prevent.stop="closeMenu">
             <div
-                class="fixed z-50 min-w-[160px] rounded-md border border-slate-700 bg-slate-900 shadow-xl text-sm py-1"
+                class="fixed z-50 min-w-40 rounded-md border border-slate-700 bg-slate-900 shadow-xl text-sm py-1"
                 :style="{ top: `${menuY}px`, left: `${menuX}px` }"
                 @click.stop
             >
@@ -185,6 +276,8 @@
                     @click="handleAction('cut')">Cut</button>
                 <button type="button" class="w-full px-3 py-1.5 text-left text-slate-200 hover:bg-slate-700/70"
                     @click="handleAction('rename')">Rename</button>
+                <button v-if="canPasteIntoNode" type="button" class="w-full px-3 py-1.5 text-left text-slate-200 hover:bg-slate-700/70"
+                    @click="handleAction('paste')">Paste</button>
                 <div class="my-1 border-t border-slate-700" />
                 <button type="button" class="w-full px-3 py-1.5 text-left text-red-400 hover:bg-slate-700/70"
                     @click="handleAction('delete')">Delete</button>

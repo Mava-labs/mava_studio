@@ -13,15 +13,14 @@ export const useLayoutStore = defineStore("layout", () =>{
     const terminalHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
     const terminalState: Ref<TerminalState> = ref("closed");
     const terminalPrevHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
-    const terminalTab: Ref<TerminalTab> = ref("scripts");
     const outlineExpaded: Ref<boolean> = ref(true);
     const explorerOpen: Ref<boolean> = ref(true);
 
-    function setActiveSideNav(key: SideNavKey | null) {
+    function setActiveSideNav(key: SideNavKey) {
         if (activeSideNav.value === key) {
             activeSideNav.value = null;
             return;
-        }
+        } 
         activeSideNav.value = key;
     }
 
@@ -108,15 +107,6 @@ export const useLayoutStore = defineStore("layout", () =>{
         setTerminalState("closed");
     }
 
-    function setTerminalTab(tab: TerminalTab) {
-        terminalTab.value = tab;
-    }
-
-    function openTerminalWithTab(tab: TerminalTab) {
-        setTerminalTab(tab);
-        openTerminal();
-    }
-
     function toggleOutlineOrExplorer(target: 'outline' | 'explorer') {
         if (target === 'outline') {
             outlineExpaded.value = !outlineExpaded.value;
@@ -129,7 +119,7 @@ export const useLayoutStore = defineStore("layout", () =>{
         activeSideNav, setActiveSideNav, activeRightUtil, setActiveRightUtil, 
         asideWidth, setAsideWidth, terminalHeight, setTerminalHeight,  toggleOutlineOrExplorer,
         terminalState, setTerminalState, toggleFull, openTerminal, closeTerminal, 
-        terminalTab, setTerminalTab, openTerminalWithTab, outlineExpaded, explorerOpen
+        outlineExpaded, explorerOpen
     }
 }, {
     persist: {
@@ -142,8 +132,7 @@ export const useLayoutStore = defineStore("layout", () =>{
             'asideWidth', 
             'terminalHeight', 
             'terminalState', 
-            'terminalPrevHeight', 
-            'terminalTab'
+            'terminalPrevHeight',
         ]
     }
 });

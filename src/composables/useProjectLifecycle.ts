@@ -260,6 +260,7 @@ export function useProjectLifecycle() {
             await project.closeProject();
             stage.setStage('empty');
             stage.resetCanvas();
+            pages.closeAll()
         } catch (err: unknown) {
             console.error('[useProjectLifecycle] closeProject error:', err);
         } finally {

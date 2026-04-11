@@ -381,10 +381,12 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
     function markDirty(scope: DirtyScope) {
         dirtyScopes.value.add(_scopeKey(scope));
         updatedAt.value = Date.now();
+        console.log('[Mark dirty] ', scope);
     }
 
     function clearDirty(scope: DirtyScope) {
         dirtyScopes.value.delete(_scopeKey(scope));
+        console.log('[Clear dirty] ', scope);
     }
 
     function clearAllDirty() {
@@ -774,6 +776,7 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
 
     function registerPage(lessonId: string, pageId: string, name: string) {
         const lesson = lessonsById.value[lessonId];
+        console.log('Registering page: ', { lessonId, pageId, name });
         if (!lesson) return;
         const order = lesson.pages.length + 1;
         lesson.pages.push({ id: pageId, name, order });

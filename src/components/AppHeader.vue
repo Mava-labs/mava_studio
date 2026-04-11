@@ -226,12 +226,14 @@
     import { useNotificationStore } from '../stores/notification';
     import { useProjectMetadataStore } from '../stores/projectMetadata';
     import { useProjectLifecycle } from '../composables/useProjectLifecycle';
+    import { useTerminalStore } from '../stores/terminal';
 
     const layout = useLayoutStore();
     const notification = useNotificationStore();
     const stage = useStageStore();
     const project = useProjectMetadataStore();
     const lifecycle = useProjectLifecycle();
+    const terminal = useTerminalStore();
 
     const recentProjects = computed(() => project.recentProjects);
 
@@ -316,7 +318,7 @@
             notification.addNotification('Please create or open a project to use the terminal.', { type: 'warn', ttl: 4000 });
             return;
         }
-        layout.openTerminalWithTab(source);
+        terminal.openTerminalWithTab(source);
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────

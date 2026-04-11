@@ -207,6 +207,13 @@ export type HistoryMeta = {
 // Prefer structuredClone when available (preserves richer types if introduced later)
 export function deepClone<T>(obj: T): T {
     // @ts-ignore structuredClone global may not be in lib target
-    if (typeof structuredClone === 'function') return structuredClone(obj);
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(obj);
+        } catch {
+            // Some runtime-attached values (e.g. host objects) are not structured-cloneable.
+            // Fall through to JSON clone for plain data snapshots used by stores/undo.
+        }
+    }
     return JSON.parse(JSON.stringify(obj));
 }

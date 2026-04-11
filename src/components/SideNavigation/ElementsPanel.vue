@@ -1,12 +1,28 @@
 <template>
     <div class="h-full overflow-y-auto thin-scroll bg-slate-950/80 backdrop-blur-sm">
-        <div class="flex flex-col gap-2 p-2">
+        <div class="flex flex-col gap-1 pb-2">
             <div
                 v-for="(category, index) in categories"
                 :key="index"
+                class=" overflow-hidden"
             >
-                <span class="capitalize text-sm font-medium text-gray-300">{{ category.name }}</span>
-                <ul class="grid grid-cols-2 gap-2">
+                <button
+                    type="button"
+                    class="w-full flex items-center border-b border-slate-800 justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-slate-200 hover:bg-slate-900/70 bg-slate-950/90 transition-colors"
+                    @click="toggleCategory(category.name)"
+                >
+                    <span class="capitalize">{{ category.name }}</span>
+                    <span class="w-4 h-4 flex items-center justify-center text-slate-500">
+                        <svg v-if="isCategoryExpanded(category.name)" class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 9-7 7-7-7" />
+                        </svg>
+                        <svg v-else class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 5 7 7-7 7" />
+                        </svg>
+                    </span>
+                </button>
+
+                <ul v-if="isCategoryExpanded(category.name)" class="grid grid-cols-2 gap-2 p-2 pt-0">
                     <li
                         v-for="(element, idx) in category.elements"
                         :key="idx"
@@ -30,6 +46,7 @@
 </template>
 
 <script setup lang="ts" vapor>
+import { ref } from 'vue';
 import { useElementStore } from '../../stores/element';
 import type { InsertableType } from '../../stores/element';
 
@@ -43,6 +60,19 @@ interface PanelElement {
 interface Category {
     name: string;
     elements: PanelElement[];
+}
+
+const expandedCategories = ref(new Set<string>(['Shapes', 'Premitives', 'Containers']));
+
+function isCategoryExpanded(name: string): boolean {
+    return expandedCategories.value.has(name);
+}
+
+function toggleCategory(name: string): void {
+    const next = new Set(expandedCategories.value);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    expandedCategories.value = next;
 }
 
 const categories: Category[] = [
@@ -62,7 +92,7 @@ const categories: Category[] = [
         ],
     },
     {
-        name: 'HTML',
+        name: 'Premitives',
         elements: [
             { type: 'text',     visualSrc: 'Text' },
             { type: 'image',    visualSrc: 'Image' },
@@ -74,11 +104,21 @@ const categories: Category[] = [
             { type: 'select',   visualSrc: 'Select' },
             { type: 'checkbox', visualSrc: 'Checkbox' },
             { type: 'radio',    visualSrc: 'Radio' },
+            { type: 'code',     visualSrc: 'Code' },
+        ],
+    },
+    {
+        name: 'Containers',
+        elements: [
+            { type: 'div',      visualSrc: 'Div' },
+            { type: 'section',  visualSrc: 'Section' },
+            { type: 'article',  visualSrc: 'Article' },
+            { type: 'header',   visualSrc: 'Header' },
+            { type: 'footer',   visualSrc: 'Footer' },
+            { type: 'nav',      visualSrc: 'Nav' },
             { type: 'form',     visualSrc: 'Form' },
             { type: 'list',     visualSrc: 'List' },
             { type: 'table',    visualSrc: 'Table' },
-            { type: 'code',     visualSrc: 'Code' },
-            { type: 'div',      visualSrc: 'Div' },
         ],
     },
 ];

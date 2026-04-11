@@ -2,6 +2,7 @@ import type {
     FlatHtmlElement,
     ContainerElement,
     SvgElement,
+    Element,
     Layout,
     Effects,
     TextStyle,
@@ -11,13 +12,48 @@ import type {
     SvgStyle,
 } from '../types/element';
 
+export type InsertableType =
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'iframe'
+    | 'button'
+    | 'input'
+    | 'select'
+    | 'checkbox'
+    | 'radio'
+    | 'form'
+    | 'list'
+    | 'table'
+    | 'code'
+    | 'div'
+    | 'section'
+    | 'article'
+    | 'header'
+    | 'footer'
+    | 'nav'
+    | 'rectangle'
+    | 'square'
+    | 'circle'
+    | 'ellipse'
+    | 'triangle'
+    | 'hexagon'
+    | 'star'
+    | 'arrow'
+    | 'hotspot'
+    | 'line'
+    | 'path';
+
 // ─── Shared defaults ────────────────────────────────────────────────────────
 
 const uid = (): string => Math.random().toString(36).slice(2, 9);
 
-const defaultLayout = (): Layout => ({
-    positioning: { mode: 'flow' },
-    size: { width: 'auto', height: 'auto' },
+const defaultLayout = (width: Layout['width'] = 'auto', height: Layout['height'] = 'auto'): Layout => ({
+    mode: 'flow',
+    position: 'static',
+    width,
+    height,
     visible: true,
     locked: false,
 });
@@ -71,8 +107,7 @@ export function buildImage(): FlatHtmlElement {
         kind: 'flatHtml',
         type: 'image',
         layout: {
-            ...defaultLayout(),
-            size: { width: 300, height: 200 },
+            ...defaultLayout('300px', '200px'),
         },
         effects: defaultEffects(),
         interaction: defaultInteraction(),
@@ -185,14 +220,145 @@ function buildContainer(
         type,
         children: [],
         display: { mode: 'block' },
-        layout: {
-            ...defaultLayout(),
-            size: { width: 'full', height: 30 },
-        },
+        layout: defaultLayout('fill', '30px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
     };
+}
+
+function buildFlatHtmlGeneric(type: FlatHtmlElement['type']): FlatHtmlElement {
+    return {
+        id: uid(),
+        name: type.charAt(0).toUpperCase() + type.slice(1),
+        kind: 'flatHtml',
+        type,
+        layout: defaultLayout(),
+        effects: defaultEffects(),
+        interaction: defaultInteraction(),
+        style: { src: '', autoplay: false, loop: false, muted: false, controls: true },
+    }
+}
+
+function buildContainerGeneric(type: ContainerElement['type'], name: string): ContainerElement {
+    return {
+        id: uid(),
+        name,
+        kind: 'container',
+        type,
+        children: [],
+        display: { mode: 'block' },
+        layout: defaultLayout('fill', '30px'),
+        effects: defaultEffects(),
+        interaction: defaultInteraction(),
+        style: { background: 'transparent', padding: 0 } as ContainerStyle,
+    }
+}
+
+export function buildElement(type: InsertableType): Element {
+    switch (type) {
+        case 'text':
+            return buildText();
+        case 'image':
+            return buildImage();
+        case 'video':
+            return buildFlatHtmlGeneric('video');
+        case 'audio':
+            return buildFlatHtmlGeneric('audio');
+        case 'iframe':
+            return buildFlatHtmlGeneric('video');
+        case 'button':
+            return buildButton();
+        case 'input':
+        case 'select':
+        case 'checkbox':
+        case 'radio':
+            return buildInput();
+        case 'form':
+            return buildForm();
+        case 'list':
+            return buildList();
+        case 'table':
+            return buildContainerGeneric('div', 'Table');
+        case 'code':
+            return buildFlatHtmlGeneric('textarea');
+        case 'div':
+            return buildDiv();
+        case 'section':
+            return buildSection();
+        case 'article':
+            return buildArticle();
+        case 'header':
+            return buildHeader();
+        case 'footer':
+            return buildFooter();
+        case 'nav':
+            return buildNav();
+        case 'rectangle':
+            return buildRect();
+        case 'square': {
+            const el = buildRect();
+            el.name = 'Square';
+            el.geometry = { type: 'rect', width: 100, height: 100 };
+            el.layout = defaultLayout('100px', '100px');
+            return el;
+        }
+        case 'circle':
+            return buildCircle();
+        case 'ellipse':
+            return buildEllipse();
+        case 'triangle': {
+            const el = buildPath();
+            el.name = 'Triangle';
+            el.type = 'polygon';
+            el.geometry = { type: 'polygon', points: [{ x: 50, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }] };
+            el.layout = defaultLayout('100px', '100px');
+            return el;
+        }
+        case 'hexagon': {
+            const el = buildPath();
+            el.name = 'Hexagon';
+            el.type = 'polygon';
+            const r = 60, cx = 60, cy = 60;
+            el.geometry = {
+                type: 'polygon',
+                points: Array.from({ length: 6 }, (_, i) => {
+                    const a = (Math.PI / 180) * (60 * i);
+                    return { x: Math.round(cx + r * Math.cos(a)), y: Math.round(cy + r * Math.sin(a)) };
+                }),
+            };
+            el.layout = defaultLayout('120px', '120px');
+            return el;
+        }
+        case 'star': {
+            const el = buildPath();
+            el.name = 'Star';
+            el.type = 'star';
+            el.geometry = { type: 'star', points: 5, innerRadius: 20, outerRadius: 50 };
+            el.layout = defaultLayout('100px', '100px');
+            return el;
+        }
+        case 'arrow': {
+            const el = buildPath();
+            el.name = 'Arrow';
+            el.type = 'arrow';
+            el.geometry = { type: 'arrow', from: { x: 0, y: 0 }, to: { x: 100, y: 0 } };
+            el.layout = defaultLayout('100px', '20px');
+            return el;
+        }
+        case 'hotspot': {
+            const el = buildRect();
+            el.name = 'Hotspot';
+            el.type = 'hotspot';
+            el.geometry = { type: 'hotspot', width: 100, height: 100 };
+            el.layout = defaultLayout('100px', '100px');
+            return el;
+        }
+        case 'line':
+            return buildLine();
+        case 'path':
+            return buildPath();
+    }
 }
 
 export const buildDiv = (): ContainerElement => buildContainer('div', 'Div');
@@ -218,10 +384,7 @@ export function buildRect(): SvgElement {
         kind: 'svg',
         type: 'rect',
         geometry: { type: 'rect', width: 200, height: 100 },
-        layout: {
-            ...defaultLayout(),
-            size: { width: 200, height: 100 },
-        },
+        layout: defaultLayout('200px', '100px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style: { ...defaultSvgStyle(), radius: 0 },
@@ -235,10 +398,7 @@ export function buildCircle(): SvgElement {
         kind: 'svg',
         type: 'circle',
         geometry: { type: 'circle', r: 50 },
-        layout: {
-            ...defaultLayout(),
-            size: { width: 100, height: 100 },
-        },
+        layout: defaultLayout('100px', '100px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style: defaultSvgStyle(),
@@ -252,10 +412,7 @@ export function buildEllipse(): SvgElement {
         kind: 'svg',
         type: 'ellipse',
         geometry: { type: 'ellipse', rx: 100, ry: 50 },
-        layout: {
-            ...defaultLayout(),
-            size: { width: 200, height: 100 },
-        },
+        layout: defaultLayout('200px', '100px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style: defaultSvgStyle(),
@@ -269,10 +426,7 @@ export function buildLine(): SvgElement {
         kind: 'svg',
         type: 'line',
         geometry: { type: 'line', x1: 0, y1: 0, x2: 100, y2: 0 },
-        layout: {
-            ...defaultLayout(),
-            size: { width: 100, height: 1 },
-        },
+        layout: defaultLayout('100px', '1px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style: {
