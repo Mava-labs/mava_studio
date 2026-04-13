@@ -9,6 +9,7 @@
                 <button
                     type="button"
                     class="w-full flex items-center border-b border-slate-800 justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-slate-200 hover:bg-slate-900/70 bg-slate-950/90 transition-colors"
+                    :class="isElementsLocked ? 'opacity-60 cursor-not-allowed' : ''"
                     @click="toggleCategory(category.name)"
                 >
                     <span class="capitalize">{{ category.name }}</span>
@@ -27,6 +28,7 @@
                         v-for="(element, idx) in category.elements"
                         :key="idx"
                         class="flex flex-col items-center gap-1 p-2 rounded cursor-pointer hover:bg-gray-800"
+                        :class="isElementsLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''"
                         @click="elementStore.addElement(element.type)"
                     >
                         <!--
@@ -46,11 +48,15 @@
 </template>
 
 <script setup lang="ts" vapor>
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useElementStore } from '../../stores/element';
+import { useProjectMetadataStore } from '../../stores/projectMetadata';
+import { useStageStore } from '../../stores/stage';
 import type { InsertableType } from '../../stores/element';
 
 const elementStore = useElementStore();
+const project = useProjectMetadataStore();
+const stage = useStageStore();
 
 interface PanelElement {
     type: InsertableType;
@@ -63,12 +69,22 @@ interface Category {
 }
 
 const expandedCategories = ref(new Set<string>(['Shapes', 'Premitives', 'Containers']));
+const isElementsLocked = computed(() => stage.currentStage === 'empty' || !project.isProjectOpen);
+
+watch(
+    isElementsLocked,
+    (locked) => {
+        if (locked) expandedCategories.value = new Set();
+    },
+    { immediate: true }
+);
 
 function isCategoryExpanded(name: string): boolean {
     return expandedCategories.value.has(name);
 }
 
 function toggleCategory(name: string): void {
+    if (isElementsLocked.value) return;
     const next = new Set(expandedCategories.value);
     if (next.has(name)) next.delete(name);
     else next.add(name);

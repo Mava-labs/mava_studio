@@ -1,6 +1,6 @@
 <script setup lang="ts" vapor>
     import { useTerminalStore } from '../../stores/terminal'
-    import { ref, watch, nextTick } from 'vue'
+    import { ref, watch, nextTick, onMounted } from 'vue'
 
     const terminal = useTerminalStore()
     const logEl = ref<HTMLElement | null>(null)
@@ -12,12 +12,18 @@
             await nextTick()
             if (logEl.value)
                 logEl.value.scrollTop = logEl.value.scrollHeight
+
+            terminal.markOutputRead()
         }
     )
+
+    onMounted(() => {
+        terminal.markOutputRead()
+    })
 </script>
 
 <template>
-    <div ref="logEl" class="output-log">
+    <div ref="logEl" class="output-log bg-slate-950">
         <div v-for="entry in terminal.entries" :key="entry.id" :class="['log-entry', `log-entry--${entry.level}`]">
             <span class="log-entry__time">
                 {{ new Date(entry.timestamp).toLocaleTimeString() }}

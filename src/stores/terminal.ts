@@ -24,14 +24,52 @@ export const useTerminalStore = defineStore('terminal', () => {
     const layout = useLayoutStore()
     const entries = ref<LogEntry[]>([])
     const terminalTab: Ref<TerminalTab> = ref("scripts");
+    const unreadCount = ref(0)
+    const unreadLevel: Ref<LogLevel | null> = ref(null)
+    const selectedScriptId: Ref<string | null> = ref(null)
+    const selectedVariableName: Ref<string | null> = ref(null)
+    const selectedTriggerId: Ref<string | null> = ref(null)
+
+    const LEVEL_WEIGHT: Record<LogLevel, number> = {
+        info: 1,
+        warn: 2,
+        error: 3,
+    }
+
+    function isOutputVisible() {
+        return terminalTab.value === 'output' && layout.terminalState !== 'closed'
+    }
+
+    function markOutputRead() {
+        unreadCount.value = 0
+        unreadLevel.value = null
+    }
 
     function setTerminalTab(tab: typeof terminalTab.value) {
         terminalTab.value = tab
+        if (tab === 'output' && layout.terminalState !== 'closed') {
+            markOutputRead()
+        }
     }
 
     function openTerminalWithTab(tab: TerminalTab) {
         setTerminalTab(tab);
         layout.openTerminal();
+        if (tab === 'output') {
+            markOutputRead()
+        }
+    }
+
+    function setSelectedScriptId(id: string | null) {
+        selectedScriptId.value = id
+    }
+
+    function setSelectedVariableName(name: string | null) {
+        selectedVariableName.value = name
+    }
+
+    function setSelectedTriggerId(id: string | null) {
+        selectedTriggerId.value = id
     }
 
     function log(level: LogLevel, message: string) {
@@ -41,6 +79,14 @@ export const useTerminalStore = defineStore('terminal', () => {
             message,
             timestamp: Date.now(),
         })
+
+        if (!isOutputVisible()) {
+            unreadCount.value += 1
+            if (!unreadLevel.value || LEVEL_WEIGHT[level] > LEVEL_WEIGHT[unreadLevel.value]) {
+                unreadLevel.value = level
+            }
+        }
+
         // mirror to browser console during development
         if (import.meta.env.DEV) {
             level === 'error' ? console.error(message)
@@ -52,7 +98,28 @@ export const useTerminalStore = defineStore('terminal', () => {
     const info = (msg: string) => log('info', msg)
     const warn = (msg: string) => log('warn', msg)
     const error = (msg: string) => log('error', msg)
-    const clear = () => { entries.value = [] }
+    const clear = () => {
+        entries.value = []
+        markOutputRead()
+    }
 
-    return { entries, info, warn, error, clear, openTerminalWithTab, terminalTab, setTerminalTab }
+    return {
+        entries,
+        unreadCount,
+        unreadLevel,
+        info,
+        warn,
+        error,
+        clear,
+        markOutputRead,
+        openTerminalWithTab,
+        terminalTab,
+        setTerminalTab,
+        selectedScriptId,
+        selectedVariableName,
+        selectedTriggerId,
+        setSelectedScriptId,
+        setSelectedVariableName,
+        setSelectedTriggerId,
+    }
 })

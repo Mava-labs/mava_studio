@@ -62,8 +62,13 @@ const ABYSS_THEME = {
         { token: '', foreground: '6688AA' },
         { token: 'comment', foreground: '3C9D3C' },
         { token: 'keyword', foreground: 'D37A7A' },
+        { token: 'event', foreground: '7FB3D5' },
+        { token: 'variable', foreground: 'A7D3A6' },
         { token: 'number', foreground: 'AA88FF' },
         { token: 'string', foreground: '88CCAA' },
+        { token: 'delimiter', foreground: '5F7E95' },
+        { token: 'operator', foreground: 'D6A15C' },
+        { token: 'constant', foreground: 'C792EA' },
         { token: 'regexp', foreground: 'C792EA' },
         { token: 'identifier', foreground: '6688AA' },
     ],
@@ -89,6 +94,21 @@ const ABYSS_THEME = {
     },
 }
 
+const TRIGGER_DSL_LANGUAGE = 'mava-trigger'
+
+const TRIGGER_DSL_KEYWORDS = [
+    'on', 'when', 'then', 'end', 'else', 'elsewhen',
+    'group', 'trigger', 'either', 'all', 'of', 'after', 'as',
+    'show', 'hide', 'enable', 'disable', 'highlight',
+    'play', 'pause', 'resume', 'stop', 'finish', 'run',
+    'navigate', 'lock', 'unlock', 'submit',
+    'wait', 'execute',
+    'next', 'prev', 'not', 'and', 'or',
+    'true', 'false', 'p', 'l',
+]
+
+let triggerDslRegistered = false
+
 // ── Composable ────────────────────────────────────────────────────────────────
 
 export function useMonaco(
@@ -98,7 +118,7 @@ export function useMonaco(
         onChange?: (value: string) => void
         onSave?: (value: string) => void   // Ctrl+S
         readOnly?: boolean
-        language?: 'typescript' | 'json'
+        language?: 'typescript' | 'json' | 'plaintext' | typeof TRIGGER_DSL_LANGUAGE
     }
 ) {
     let monaco: MonacoEditor | null = null
@@ -109,12 +129,79 @@ export function useMonaco(
     const isReady = ref(false)
     let initPromise: Promise<void> | null = null
 
-    function languageOf(): 'typescript' | 'json' {
+    function languageOf(): 'typescript' | 'json' | 'plaintext' | typeof TRIGGER_DSL_LANGUAGE {
         return options?.language ?? 'typescript'
     }
 
-    function extensionOfLanguage(language: 'typescript' | 'json'): 'ts' | 'json' {
-        return language === 'json' ? 'json' : 'ts'
+    function extensionOfLanguage(language: 'typescript' | 'json' | 'plaintext' | typeof TRIGGER_DSL_LANGUAGE): 'ts' | 'json' | 'txt' | 'dsl' {
+        if (language === 'json') return 'json'
+        if (language === 'plaintext') return 'txt'
+        if (language === TRIGGER_DSL_LANGUAGE) return 'dsl'
+        return 'ts'
+    }
+
+    function registerTriggerDslLanguage() {
+        if (!monaco || triggerDslRegistered) return
+
+        monaco.languages.register({ id: TRIGGER_DSL_LANGUAGE })
+        monaco.languages.setLanguageConfiguration(TRIGGER_DSL_LANGUAGE, {
+            comments: {
+                lineComment: '//',
+                blockComment: ['/*', '*/'],
+            },
+            brackets: [
+                ['(', ')'],
+                ['[', ']'],
+                ['{', '}'],
+            ],
+            autoClosingPairs: [
+                { open: '(', close: ')' },
+                { open: '[', close: ']' },
+                { open: '{', close: '}' },
+                { open: '"', close: '"' },
+                { open: '/*', close: ' */', notIn: ['string'] },
+            ],
+            surroundingPairs: [
+                { open: '(', close: ')' },
+                { open: '[', close: ']' },
+                { open: '{', close: '}' },
+                { open: '"', close: '"' },
+            ],
+            indentationRules: {
+                increaseIndentPattern: /^\s*(on|when|then|else|elsewhen|trigger)\b/,
+                decreaseIndentPattern: /^\s*end\b/,
+            },
+            folding: {
+                markers: {
+                    start: /^\s*(on|trigger)\b/,
+                    end: /^\s*end\b/,
+                },
+            },
+        })
+        monaco.languages.setMonarchTokensProvider(TRIGGER_DSL_LANGUAGE, {
+            tokenizer: {
+                root: [
+                    [/\/\/.*$/, 'comment'],
+                    [/\/\*/, 'comment', '@comment'],
+                    [/"([^"\\]|\\.)*"/, 'string'],
+                    [/\b\d+(?:\.\d+)?(?:ms|s|m|%|px)?\b/, 'number'],
+                    [/\b[a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w.]*)+\b/, 'event'],
+                    [new RegExp(`\\b(?:${TRIGGER_DSL_KEYWORDS.join('|')})\\b`), 'keyword'],
+                    [/\b(?:true|false)\b/, 'constant'],
+                    [/\+=|-=|==|!=|>=|<=|=|>|<|:/, 'operator'],
+                    [/\(|\)|\[|\]|\{|\}|,|\\|\./, 'delimiter'],
+                    [/\b[a-zA-Z_][\w]*\b/, 'variable'],
+                    [/\s+/, 'white'],
+                ],
+                comment: [
+                    [/[^*/]+/, 'comment'],
+                    [/\*\//, 'comment', '@pop'],
+                    [/[*\/]/, 'comment'],
+                ],
+            },
+        })
+
+        triggerDslRegistered = true
     }
 
     function getModelForScript(current: ScriptDef | null): ModelInstance | null {
@@ -154,6 +241,7 @@ export function useMonaco(
         initPromise = (async () => {
             // Lazy load Monaco
             monaco = await import('monaco-editor')
+            registerTriggerDslLanguage()
 
             // Inject $stage API types once
             monaco.typescript.typescriptDefaults.addExtraLib(
@@ -280,5 +368,13 @@ export function useMonaco(
         editor?.focus()
     }
 
-    return { isReady, getValue, setValue, focus }
+    function getEditor() {
+        return editor
+    }
+
+    function getMonaco() {
+        return monaco
+    }
+
+    return { isReady, getValue, setValue, focus, getEditor, getMonaco }
 }

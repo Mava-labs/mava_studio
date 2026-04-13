@@ -16,8 +16,16 @@ import { defineStore } from 'pinia'
 import { reactive, readonly } from 'vue'
 import type { VariableDef, VariableType } from '../types/variables'
 import { useTerminalStore } from './terminal'
+import { useNotificationStore } from './notification'
 
 export const useVariableStore = defineStore('variables', () => {
+    const terminal = useTerminalStore()
+    const notifications = useNotificationStore()
+
+    function rejectVariableAction(message: string) {
+        terminal.error(message)
+        notifications.addNotification(message, { type: 'error', ttl: 4500 })
+    }
 
     // ── Definitions ───────────────────────────────────────────────────────────
 
@@ -160,7 +168,7 @@ export const useVariableStore = defineStore('variables', () => {
     function getVar(name: string, pageId: string): unknown {
         const def = definitions[name]
         if (!def) {
-            useTerminalStore().error(`Variable "${name}" is not defined.`)
+            rejectVariableAction(`Variable "${name}" is not defined.`)
             return undefined
         }
         return def.scope === 'global'
@@ -171,13 +179,13 @@ export const useVariableStore = defineStore('variables', () => {
     function setVar(name: string, value: unknown, pageId: string): boolean {
         const def = definitions[name]
         if (!def) {
-            useTerminalStore().error(`Variable "${name}" is not defined.`)
+            rejectVariableAction(`Variable "${name}" is not defined.`)
             return false
         }
 
         // Type check
         if (!isCompatibleValue(value, def.type)) {
-            useTerminalStore().error(
+            rejectVariableAction(
                 `Type mismatch: variable "${name}" expects ${def.type}, got ${typeof value}.`
             )
             return false

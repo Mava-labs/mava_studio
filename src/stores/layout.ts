@@ -13,6 +13,7 @@ export const useLayoutStore = defineStore("layout", () =>{
     const terminalHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
     const terminalState: Ref<TerminalState> = ref("closed");
     const terminalPrevHeight: Ref<number> = ref(clamp(3, 3, Number.MAX_SAFE_INTEGER));
+    const terminalLocked: Ref<boolean> = ref(false);
     const outlineExpaded: Ref<boolean> = ref(true);
     const explorerOpen: Ref<boolean> = ref(true);
 
@@ -39,6 +40,7 @@ export const useLayoutStore = defineStore("layout", () =>{
     }
 
     function setTerminalHeight(height: number) {
+        if (terminalLocked.value) return;
         // UI minimum is 3px, no strict max since it depends on viewport
         const h = Math.max(3, Math.floor(height));
         terminalHeight.value = h;
@@ -50,16 +52,17 @@ export const useLayoutStore = defineStore("layout", () =>{
     function setTerminalState(state: TerminalState) {
         const current = terminalState.value;
         if (state === current) return;
+        if (terminalLocked.value && state !== "closed") return;
 
         if (state === "full") {
-            // Remember height before going full
-            const h = terminalHeight.value;
-            terminalPrevHeight.value = h;
-            // TODO
-            // if (isBrowser) {
-            //     const maxH = window.innerHeight;
-            //     terminalHeight.value = Math.max(3, Math.floor(maxH));
-            // }
+            // Preserve last known normal height so we can restore from full.
+            const normalHeight = current === "closed" ? terminalPrevHeight.value : terminalHeight.value;
+            terminalPrevHeight.value = Math.max(3, Math.floor(normalHeight));
+
+            // Drive height to max available; UI container max-h-full will clamp precisely.
+            if (typeof window !== "undefined") {
+                terminalHeight.value = Math.max(3, Math.floor(window.innerHeight));
+            }
             terminalState.value = "full";
             return;
         }
@@ -68,19 +71,23 @@ export const useLayoutStore = defineStore("layout", () =>{
             if (current === "full") {
                 // Restore previous height if coming from full
                 const prev = terminalPrevHeight.value;
-                terminalHeight.value = Math.max(3, Math.floor(prev));
+                terminalHeight.value = Math.max(3, Math.floor(prev || 250));
             }
             terminalState.value = "normal";
             return;
         }
 
         // closed
-        const h = terminalHeight.value;
-        terminalPrevHeight.value = h;
+        // Do not overwrite last normal height when closing from full.
+        if (current !== "full") {
+            const h = terminalHeight.value;
+            terminalPrevHeight.value = h;
+        }
         terminalState.value = "closed";
     }
 
     function toggleFull() {
+        if (terminalLocked.value) return;
         const s = terminalState.value;
         if (s === "full") {
             setTerminalState("normal");
@@ -91,6 +98,7 @@ export const useLayoutStore = defineStore("layout", () =>{
     }
 
     function openTerminal() {
+        if (terminalLocked.value) return;
         const s = terminalState.value;
         let prev = terminalPrevHeight.value || terminalHeight.value;
         if (s === "closed") {
@@ -107,6 +115,14 @@ export const useLayoutStore = defineStore("layout", () =>{
         setTerminalState("closed");
     }
 
+    function setTerminalLocked(locked: boolean) {
+        terminalLocked.value = locked;
+        if (locked) {
+            terminalHeight.value = 3;
+            terminalState.value = "closed";
+        }
+    }
+
     function toggleOutlineOrExplorer(target: 'outline' | 'explorer') {
         if (target === 'outline') {
             outlineExpaded.value = !outlineExpaded.value;
@@ -118,7 +134,8 @@ export const useLayoutStore = defineStore("layout", () =>{
     return { 
         activeSideNav, setActiveSideNav, activeRightUtil, setActiveRightUtil, 
         asideWidth, setAsideWidth, terminalHeight, setTerminalHeight,  toggleOutlineOrExplorer,
-        terminalState, setTerminalState, toggleFull, openTerminal, closeTerminal, 
+        terminalState, setTerminalState, toggleFull, openTerminal, closeTerminal,
+        terminalLocked, setTerminalLocked,
         outlineExpaded, explorerOpen
     }
 }, {

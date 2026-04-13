@@ -14,7 +14,7 @@
                     <SideNav />
 
                     <!-- Nav Associates: hidden when none selected -->
-                    <aside ref="asideElementRef" v-if="layout.activeSideNav"
+                    <aside ref="asideEl" v-if="layout.activeSideNav"
                         class="min-w-48 relative max-w-64 resize-x overflow-hidden  bg-slate-200 dark:bg-slate-700"
                         :style="{ width: `${layout.asideWidth}px` }">
                         <div class="h-full overflow-auto">
@@ -36,11 +36,12 @@
                     <NotificationsTray />
 
                     <!-- Terminal component -->
-                    <div ref="terminalElementRef" id="terminal"
+                    <div ref="terminalEl" id="terminal"
                         class="absolute z-20 bottom-0 left-0 right-0 min-h-0.75 max-h-full resize-y overflow-auto bg-slate-950 border-slate-50 dark:border-slate-800 no-scroll overflow-y-auto"
                         :class="layout.terminalState === 'closed' ? 'border-0' : 'border-t'"
-                        :style="{ height: `${layout.terminalState === 'closed' ? 3 : layout.terminalHeight}px` }">
-                        <div class="absolute top-0 right-0 left-0 h-1 cursor-ns-resize bg-transparent hover:bg-slate-400 transition"
+                        :style="{ height: `${terminalRenderHeight}px` }">
+                        <div class="absolute z-30 -top-1 right-0 left-0 h-2 cursor-ns-resize touch-none transition"
+                            :class="terminalResizeHandleClass"
                             @pointerdown="(e) => startResize(e, 'terminal')">
                         </div>
                         <TerminalPanel/>
@@ -66,7 +67,7 @@
 
 <script setup lang="ts" vapor>
 
-    import { onMounted, ref } from 'vue';
+    import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
     import AppHeader from './components/AppHeader.vue';
     import SideNav from './components/SideNav.vue';
     import NavAssociates from './components/NavAssociates.vue';
@@ -79,19 +80,48 @@
     import EmptyProject from './mods/emptyProject.vue';
 
     import { useLayoutStore } from './stores/layout';
+    import { useNotificationStore } from './stores/notification';
+    import { useProjectMetadataStore } from './stores/projectMetadata';
     import { useStageStore } from './stores/stage';
 
     const layout = useLayoutStore();
+    const notification = useNotificationStore();
     const stage = useStageStore();
+    const project = useProjectMetadataStore();
 
-    let asideEl = ref<HTMLElement | null>(null);
-    let terminalEl = ref<HTMLElement | null>(null);
+    let asideEl = useTemplateRef('asideEl');
+    let terminalEl = useTemplateRef('terminalEl');
 
-    let dragTarget: "aside" | "terminal" | null = null;
+    const dragTarget = ref<"aside" | "terminal" | null>(null);
+    const terminalDragHeight = ref<number | null>(null);
+    const isTerminalLocked = computed(() => stage.currentStage === 'empty' || !project.isProjectOpen);
+    const terminalRenderHeight = computed(() => terminalDragHeight.value ?? (layout.terminalState === 'closed' ? 3 : layout.terminalHeight));
+    const terminalResizeHandleClass = computed(() =>
+        dragTarget.value === 'terminal' ? 'bg-slate-400/70' : 'bg-transparent hover:bg-slate-400/70'
+    );
+
+    watch(
+        isTerminalLocked,
+        (locked) => {
+            layout.setTerminalLocked(locked);
+        },
+        { immediate: true }
+    );
 
     function startResize(e: PointerEvent, target: "aside" | "terminal") {
+        if (target === 'terminal' && isTerminalLocked.value) {
+            notification.addNotification('Terminal is disabled until a project is open and not in empty mode.', {
+                type: 'warn',
+                ttl: 3000,
+            });
+            return;
+        }
         e.preventDefault();
-        dragTarget = target;
+        dragTarget.value = target;
+
+        if (target === 'terminal') {
+            (e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId);
+        }
 
         // Prevent accidental text selection while dragging
         document.body.style.userSelect = "none";
@@ -101,30 +131,48 @@
     }
 
     function handleResize(e: PointerEvent) {
-        if (dragTarget === "aside") {
+        if (dragTarget.value === "aside") {
             if (!asideEl.value) return;
             const newWidth = e.clientX - asideEl.value.getBoundingClientRect().left;
             if (newWidth >= 150 && newWidth <= 400) {
                 layout.setAsideWidth(newWidth);
             }
         }
-        else if (dragTarget === "terminal") {
-            if (!terminalEl) return;
-            const containerBottom = window.innerHeight;
-            const newHeight = containerBottom - e.clientY;
-            // terminal state should change from closed if was closed so that the ui can adjust accordingly
-            if (newHeight >= 3 && newHeight <= containerBottom - 50) {
-                layout.setTerminalHeight(newHeight);
-                if (layout.terminalState === 'closed') layout.openTerminal();
-            } else if (newHeight < 3) {
-                layout.setTerminalHeight(3); // Prevent it from going below minimum height
-                layout.closeTerminal();
+        else if (dragTarget.value === "terminal") {
+            if (!terminalEl.value || isTerminalLocked.value) return;
+            const hostRect = terminalEl.value.parentElement?.getBoundingClientRect();
+            if (!hostRect) return;
+
+            const containerBottom = hostRect.bottom;
+            const maxHeight = Math.max(3, hostRect.height - 50);
+            const newHeight = Math.max(3, Math.min(maxHeight, containerBottom - e.clientY));
+
+            // Keep drag interaction 1:1 with pointer position and commit once on pointerup.
+            terminalDragHeight.value = newHeight;
+
+            if (newHeight > 3 && layout.terminalState === 'closed') {
+                layout.openTerminal();
             }
         }
     }
 
     function stopResize() {
-        dragTarget = null;
+        const activeTarget = dragTarget.value;
+        dragTarget.value = null;
+
+        if (activeTarget === 'terminal' && terminalDragHeight.value !== null) {
+            const finalHeight = terminalDragHeight.value;
+            terminalDragHeight.value = null;
+
+            if (finalHeight <= 3) {
+                layout.setTerminalHeight(3);
+                layout.closeTerminal();
+            } else {
+                layout.setTerminalHeight(finalHeight);
+                if (layout.terminalState === 'closed') layout.openTerminal();
+            }
+        }
+
         document.body.style.userSelect = "";
         document.removeEventListener("pointermove", handleResize);
         document.removeEventListener("pointerup", stopResize);

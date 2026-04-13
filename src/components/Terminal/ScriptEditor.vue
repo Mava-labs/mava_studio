@@ -1,5 +1,5 @@
 <script setup lang="ts" vapor>
-    import { computed, ref } from 'vue'
+    import { computed, ref, watch } from 'vue'
     import { useMonaco } from '../../composables/useMonaco'
     import { useProjectMetadataStore } from '../../stores/projectMetadata'
     import { useTerminalStore } from '../../stores/terminal'
@@ -63,17 +63,30 @@
         return script
     }
 
-    function removeScript(id: string) {
-        project.deleteScript(id)
-        selectedId.value = scripts.value.find(script => script.id !== id)?.id ?? null
-    }
+    watch(
+        scripts,
+        () => {
+            if (selectedId.value === null) return
+            if (selectedId.value && project.actionScripts[selectedId.value]) return
+            selectedId.value = scripts.value[0]?.id ?? null
+        },
+        { immediate: true }
+    )
+
+    watch(
+        selectedId,
+        (id) => {
+            terminal.setSelectedScriptId(id)
+        },
+        { immediate: true }
+    )
 
     defineExpose({ createScript })
 </script>
 
 <template>
-    <div class="script-editor">
-        <div class="editor-area">
+    <div class="script-editor bg-slate-950">
+        <div class="editor-area bg-slate-950">
             <div v-if="!selectedScript" class="editor-empty">
                 No script selected. Create one to get started.
             </div>
@@ -101,18 +114,9 @@
                     :key="script.id"
                     class="script-item group"
                     :class="{ 'script-item--active': script.id === selectedId }"
-                    @click="selectedId = script.id"
+                    @click="selectedId = selectedId === script.id ? null : script.id"
                 >
                     <span class="script-item__label">{{ script.name }}</span>
-                    <button
-                        type="button"
-                        class="icon-btn icon-btn--danger script-item__close"
-                        :class="script.id === selectedId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                        @click.stop="removeScript(script.id)"
-                        title="Delete"
-                    >
-                        ×
-                    </button>
                 </li>
             </ul>
         </aside>
@@ -124,7 +128,6 @@
         display: flex;
         height: 100%;
         overflow: hidden;
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.98));
         color: #e2e8f0;
     }
 
@@ -132,7 +135,6 @@
         flex: 1;
         position: relative;
         overflow: hidden;
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.28), rgba(2, 6, 23, 0.08));
     }
 
     .editor-shell {

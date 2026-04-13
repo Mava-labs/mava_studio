@@ -314,8 +314,8 @@
     }
 
     function openTerminal(source: 'scripts' | 'timeline') {
-        if (!project.isProjectOpen) {
-            notification.addNotification('Please create or open a project to use the terminal.', { type: 'warn', ttl: 4000 });
+        if (!project.isProjectOpen || stage.currentStage === 'empty') {
+            notification.addNotification('Terminal is disabled until a project is open and not in empty mode.', { type: 'warn', ttl: 4000 });
             return;
         }
         terminal.openTerminalWithTab(source);

@@ -1,0 +1,484 @@
+============================================================
+  MAVA TRIGGER DSL — TIGHTENED MVP SPECIFICATION
+============================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. PROGRAM STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<program> ::= { <definition> }
+
+<definition> ::=
+    | <group_def>
+    | <named_trigger_def>
+    | <trigger_def>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. GROUP DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Element group:
+  group <id> = [<id_list>]
+
+Variable group:
+  group <id> = <id_list>      // no brackets — ids resolved as variables
+
+Rules:
+  - Element group ids are resolved against element registry
+  - Variable group ids are resolved against variable registry
+  - Group names must be unique in program scope
+  - Groups are not page-scoped — they are program-level definitions
+
+Examples:
+  group nav_buttons   = [next_button, prev_button, home_button]
+  group score_vars    = total_score, bonus_score, penalty_score
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. NAMED TRIGGERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+trigger <id>
+  <trigger_body>
+end
+
+Rules:
+  - Named triggers are globally accessible — not page-scoped
+  - Named trigger names must be unique in program scope
+  - Element/variable references inside are validated at invocation
+    time, not definition time, since the named trigger may be
+    invoked from any page
+  - Can be invoked from any trigger action with: trigger <id>
+  - Cannot be defined inside another trigger
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. TRIGGER BODY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<trigger_body> ::= <event_clause> <trigger_rest> "end"
+
+<event_clause> ::=
+    "on" <event_spec>                                  // single event
+  | "on" "either" <event_spec> { "," <event_spec> }   // any one fires
+  | "on" "all of" <event_spec> { "," <event_spec> }   // all must fire
+
+<event_spec> ::= <event> [ <subject> ]
+
+<trigger_rest> ::=
+    <conditional_form>
+  | <short_form>
+
+<conditional_form> ::=
+    "when" <expr>
+    "then"
+      <actions>
+    { "elsewhen" <expr> "then" <actions> }
+    [ "else" <actions> ]
+
+<short_form> ::= <actions>    // no when/then — actions fire immediately
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. EVENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Syntax: <namespace>.<name> or plain <name>
+
+USER EVENTS
+  click       [element | group]
+  dblclick    [element | group]
+  hover       [element | group]
+  focus       [element | group]
+  blur        [element | group]
+  keypress    [key_name]           // e.g. keypress [Enter], keypress [Escape]
+  keydown     [key_name]
+  keyup       [key_name]
+  submit      [form_element]
+
+PAGE LIFECYCLE EVENTS
+  before.mount   [page_id]        // before page mounts — for checks/preload
+  mount          [page_id]        // page has mounted
+  before.unmount [page_id]        // before page leaves — for cleanup/save
+  unmount        [page_id]        // page has unmounted
+  enter          [page_id]        // alias for mount (navigation context)
+  leave          [page_id]        // alias for before.unmount
+
+MEDIA EVENTS
+  media.play       [media_element]
+  media.pause      [media_element]
+  media.resume     [media_element]
+  media.stop       [media_element]
+  media.complete   [media_element]
+  media.progress   [media_element]   // use when/comparison to gate thresholds
+
+ANIMATION EVENTS
+  animation.start      [animation_element]
+  animation.complete   [animation_element]
+  animation.loop       [animation_element]
+
+VARIABLE EVENTS
+  variable.change  <variable_id>   // plain id, no brackets
+
+QUIZ / FORM EVENTS
+  quiz.start      [quiz_element]
+  quiz.complete   [quiz_element]
+  quiz.fail       [quiz_element]
+  form.submit     [form_element]
+  form.reset      [form_element]
+
+TIMELINE EVENTS  (optional per page — phased inclusion)
+  timeline.start
+  timeline.stop
+  timeline.pause
+  timeline.resume
+  timeline.reaches  <time_literal | variable>
+    // time_literal:  45s, 1.5m
+    // variable:      plain identifier resolved from variable registry
+    //                must resolve to number/time at runtime
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. SUBJECTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[element_id]                    // single element
+[element_id, element_id, ...]   // inline list
+group_name                      // group alias — resolved at compile time
+{\p page_name}                  // structural ref — page
+{\l lesson_name}                // structural ref — lesson
+<identifier>                    // plain id for variable events only
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. EXPRESSIONS (CONDITIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<expr> ::=
+    <comparison>
+  | <expr> "and" <expr>
+  | <expr> "or"  <expr>
+  | "not" <expr>
+  | "(" <expr> ")"
+
+<comparison> ::= <operand> <comp_op> <operand>
+
+<comp_op> ::= ">" | ">=" | "<" | "<=" | "==" | "!="
+
+<operand> ::=
+    <number_literal>             // 42, 3.14
+  | <time_literal>               // 5s, 1.5m
+  | <percent_literal>            // 80%, 0.5%
+  | <string_literal>             // "hello"
+  | <bool_literal>               // true, false
+  | <identifier>                 // variable reference
+
+Measurement units accepted:
+  s, ms    — time
+  %        — percentage
+  px       — pixels (for position/size comparisons)
+  (plain number assumed as raw value when no unit)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. ACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<actions> ::= { <action_stmt> }
+
+<action_stmt> ::=
+    <element_action>
+  | <media_action>
+  | <animation_action>
+  | <navigation_action>
+  | <access_action>
+  | <variable_assignment>
+  | <flow_action>
+
+━━━  ELEMENT ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+show        <target> [ "after" <time_literal> ]
+hide        <target> [ "after" <time_literal> ]
+enable      <target>          // interactive elements only
+disable     <target>          // interactive elements only
+highlight   <target>          // toggles highlight property on element
+submit      <target>          // form elements only
+
+━━━  MEDIA ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+play    <target> [ "after" <time_literal> ]   // start/restart media
+pause   <target>                               // freeze at position
+resume  <target>                               // continue from pause
+stop    <target>                               // halt + reset to start
+
+━━━  ANIMATION ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+run     <target> [ "after" <time_literal> ]   // start animation
+pause   <target>                               // freeze at frame
+resume  <target>                               // continue from pause
+stop    <target>                               // halt + reset to start
+finish  <target>                               // force skip to final frame
+
+Note: pause/resume/stop are shared keywords — compiler resolves
+      correct dispatch by checking target element type.
+
+━━━  NAVIGATION ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+navigate  <page_target> [ "after" <time_literal> ]
+
+<page_target> ::=
+    "[" <page_id> "]"
+  | "{\p" <page_name> "}"
+  | "next"                  // next page in lesson sequence
+  | "prev"                  // previous page in lesson sequence
+
+━━━  ACCESS CONTROL ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+lock    "[" <page_or_section_id> "]"
+unlock  "[" <page_or_section_id> "]"
+
+Note: lock/unlock operate on pages and sections only.
+      Use enable/disable for element-level interaction control.
+
+━━━  VARIABLE ASSIGNMENT  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<identifier> "="  <value>     // direct assignment
+<identifier> "+=" <value>     // add and assign (number only)
+<identifier> "-=" <value>     // subtract and assign (number only)
+
+<value> ::=
+    <string_literal>           // "hello world"
+  | <number_literal>           // 42, 3.14
+  | <percent_literal>          // 80%
+  | <bool_literal>             // true, false
+  | <list_literal>             // [item1, item2, item3]
+  | <object_literal>           // { key: value, key: value }
+  | <identifier>               // another variable
+
+Type rules:
+  - += and -= only valid on number variables
+  - Assigned value must match declared variable type
+  - If identifier on right side: resolved from variable registry,
+    type must be compatible
+
+━━━  FLOW ACTIONS  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+wait      <time_literal>       // pause sequence execution
+execute   <script_name>        // run a named script
+trigger   <trigger_name>       // invoke a named trigger
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. TARGETS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<target> ::=
+    "[" <identifier> "]"           // single element by id
+  | "[" <id_list> "]"              // inline element list
+  | <group_name>                   // group alias
+  | "{\p" <page_name> "}"         // structural page ref
+  | "{\l" <lesson_name> "}"       // structural lesson ref
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. COMPILE-TIME VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ERRORS — compilation halted
+  E001  Unknown element id in subject or target
+  E002  Unknown variable in condition or assignment
+  E003  Unknown script name in execute
+  E004  Unknown named trigger in trigger <id>
+  E005  Unknown group name
+  E006  variable.change subject must be plain identifier, not [bracketed]
+  E007  play target is not a media element — did you mean run?
+  E008  run target is not an animation element — did you mean play?
+  E009  enable/disable target is not an interactive element
+  E010  lock/unlock target must be a page or section, not an element
+        — did you mean enable/disable?
+  E011  submit target must be a form element
+  E012  += and -= are only valid on number variables
+  E013  Type mismatch in assignment — variable <x> expects <type>
+  E014  timeline.* event on page with no timeline configured
+  E015  Unreachable branch — elsewhen after else
+  E016  Named trigger name collision
+  E017  Group name collision
+  E018  trigger definition nested inside another trigger
+  E019  all of / either requires at least 2 event specs
+  E020  timeline.reaches subject is not a time literal or number variable
+
+WARNINGS — compilation continues, behavior may be unintended
+  W001  show/hide inside unmount or leave — likely no-op, ignored at runtime
+  W002  navigate inside mount or before.mount — may cause navigation loop
+  W003  all of with variable.change — may never resolve if other
+        events fire and variable never changes
+  W004  wait 0s or negative duration — wait ignored at runtime
+  W005  Named trigger references element that does not exist on
+        current page — will error at invocation time
+
+INFO — helpful nudges, not problems
+  I001  No qualifier on multi-event — defaulting to either
+  I002  either with single event spec — qualifier is redundant
+  I003  Group defined but never referenced
+  I004  Named trigger defined but never invoked
+  I005  Script <name> has no compiled output — execute will no-op at runtime
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. TRIGGER INTENT SUMMARY  (generated on successful parse)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Format shown in UI after successful parse:
+
+  ┌─────────────────────────────────────────┐
+  │ highlight_next_step                     │
+  │ When timeline reaches 45s, assigns      │
+  │ next_step, shows next_step_hint and     │
+  │ plays highlight_animation.              │
+  └─────────────────────────────────────────┘
+
+Generation rules:
+  - Trigger name: named trigger id, or "Unnamed trigger" for locals
+  - Summary: one to two natural language sentences
+  - Conditioned actions: "If <condition>, <actions>"
+  - elsewhen: "Otherwise if <condition>, <actions>"
+  - else: "Otherwise, <actions>"
+  - Multiple actions collapsed: "shows X, hides Y and runs Z"
+  - wait: "after <duration>"
+  - Max summary length: 120 characters — truncate with "…and N more actions"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. MONACO INTEGRATION — DIAGNOSTIC MAPPING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Severity mapping:
+  ERROR   → monaco.MarkerSeverity.Error    (red underline)
+  WARNING → monaco.MarkerSeverity.Warning  (yellow underline)
+  INFO    → monaco.MarkerSeverity.Info     (blue underline)
+  HINT    → monaco.MarkerSeverity.Hint     (grey dotted)
+
+Each diagnostic carries:
+  - code:     e.g. "E007"
+  - message:  human friendly description
+  - startLine, startCol, endLine, endCol  — for precise underlining
+  - quickFix?: suggested replacement text (used by Monaco's
+               lightbulb quick-fix feature)
+
+Quick-fix examples:
+  E007  play [intro_animation]
+        → "Change to: run [intro_animation]"
+
+  E006  on variable.change [attempts]
+        → "Change to: on variable.change attempts"
+
+  E010  lock [submit_button]
+        → "Change to: disable [submit_button]"
+
+  E015  else ... elsewhen
+        → "Move elsewhen before else"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. LEXICAL RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COMMENTS
+  Line comment:       // everything after is ignored until newline
+  Block comment:      /* everything inside is ignored, can span lines */
+  Comments are stripped at tokenization — never reach the parser.
+
+STATEMENT SEPARATION
+  Newline is the statement terminator.
+  Multiple consecutive newlines are treated as one.
+  Blank lines are ignored.
+  No semicolons — they are not valid syntax and produce:
+    E021  Unexpected token ';' — statements are separated by newlines
+
+CASE SENSITIVITY
+  Keywords:     always lowercase — 'on', 'when', 'then', 'end',
+                'show', 'hide', 'run', 'play', etc.
+  Identifiers:  case-sensitive — 'intro_Video' and 'intro_video'
+                are different identifiers
+
+CASE DIAGNOSTICS
+  If an identifier exactly matches a keyword in different case:
+    E022  '<token>' is not a valid keyword — keywords are lowercase.
+          Did you mean '<lowercase>'?
+          QuickFix → lowercase the token
+
+  If an identifier matches a known element/variable name
+  in different case:
+    W006  '<token>' not found. Did you mean '<closest_match>'?
+          QuickFix → replace with closest_match
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. TOKENIZER RULES (summary)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Token types:
+  KEYWORD       reserved words listed in section 15
+  IDENTIFIER    [a-zA-Z_][a-zA-Z0-9_]*
+  NUMBER        [0-9]+ ( '.' [0-9]+ )?
+  TIME          <number> ('s' | 'ms' | 'm')
+  PERCENT       <number> '%'
+  PIXELS        <number> 'px'
+  STRING        '"' <any chars except unescaped '"'> '"'
+  BOOL          'true' | 'false'
+  LBRACKET      '['
+  RBRACKET      ']'
+  LBRACE        '{'
+  RBRACE        '}'
+  COLON         ':'     (object literal key-value separator)
+  COMMA         ','
+  ASSIGN        '='
+  PLUS_ASSIGN   '+='
+  MINUS_ASSIGN  '-='
+  GT            '>'
+  GTE           '>='
+  LT            '<'
+  LTE           '<='
+  EQ            '=='
+  NEQ           '!='
+  BACKSLASH     '\'    (inside structural refs {\p ...})
+  NEWLINE       '\n'   (statement terminator)
+  EOF
+
+  Whitespace (space, tab) is skipped between tokens.
+  Newlines are significant — emitted as NEWLINE tokens.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+15. RESERVED KEYWORDS (complete list)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Structure:
+  on, when, then, end, else, elsewhen,
+  group, trigger, either, all, of, after, as
+
+Actions:
+  show, hide, enable, disable, highlight,
+  play, pause, resume, stop, finish, run,
+  navigate, lock, unlock, submit,
+  wait, execute
+
+Operands / values:
+  true, false, next, prev, not, and, or
+
+Structural ref tags (inside {\...}):
+  p, l
+
+Total: 38 reserved keywords
+None of these may be used as identifiers.
+
+If author uses a keyword as identifier:
+  E023  '<token>' is a reserved keyword and cannot be used
+        as an identifier.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+16. SECTION INVENTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1.  Program structure
+2.  Group definitions
+3.  Named triggers
+4.  Trigger body
+5.  Events
+6.  Subjects
+7.  Expressions
+8.  Actions
+9.  Targets
+10. Compile-time validation  (E001–E021 + W001–W005 + I001–I005)
+11. Trigger intent summary
+12. Monaco diagnostic mapping
+13. Lexical rules           (E022–E023 + W006)
+14. Tokenizer rules
+15. Reserved keywords
