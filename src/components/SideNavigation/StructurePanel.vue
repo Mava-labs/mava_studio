@@ -11,7 +11,29 @@ import { useNotificationStore } from "../../stores/notification";
 import { useElementStore } from "../../stores/element";
 import type { Element } from "../../types/element";
 import { type Module, type Lesson, type Page } from "../../types/project";
+import type { EvidenceType } from "../../types/cf-alignment.types";
 import { generateId } from "../../utils/id";
+
+type LessonMetadataLike = Omit<Lesson['metadata'], 'prerequisites' | 'tags'> & {
+    prerequisites?: readonly string[]
+    tags?: readonly string[]
+}
+
+type LessonLike = {
+    id: string
+    type: Lesson['type']
+    visible: boolean
+    summary?: string
+    pages: ReadonlyArray<Readonly<{ name: string; id: string; order: number }>>
+    metadata: LessonMetadataLike
+    cf_alignment?: {
+        framework_id: string
+        competency_id: string
+        indicator_ids: readonly string[]
+        evidence_item_id?: string
+        evidence_type?: EvidenceType
+    }
+}
 
 type ActiveExplorerPath = {
     moduleId?: string;
@@ -232,7 +254,7 @@ async function handleNodeAction(payload: { action: string; node: ExplorerNode; n
     };
 
     const toMutableLessonMetadata = (
-        metadata: Readonly<Lesson['metadata']>,
+        metadata: LessonMetadataLike,
         title?: string,
         updatedAt?: number
     ): Lesson['metadata'] => ({
@@ -248,19 +270,35 @@ async function handleNodeAction(payload: { action: string; node: ExplorerNode; n
     });
 
     const toMutableLesson = (
-        lesson: Readonly<Lesson>,
+        lesson: LessonLike,
         overrides?: Partial<Lesson>
-    ): Lesson => ({
-        ...lesson,
-        ...overrides,
-        cfNodeIds: lesson.cfNodeIds ? [...lesson.cfNodeIds] : undefined,
-        pages: (overrides?.pages ?? lesson.pages).map((p) => ({ ...p })),
-        metadata: toMutableLessonMetadata(
-            lesson.metadata,
-            overrides?.metadata?.title,
-            overrides?.metadata?.updatedAt
-        ),
-    });
+    ): Lesson => {
+        const baseAlignment = lesson.cf_alignment
+            ? {
+                framework_id: lesson.cf_alignment.framework_id,
+                competency_id: lesson.cf_alignment.competency_id,
+                indicator_ids: [...lesson.cf_alignment.indicator_ids],
+                ...(lesson.cf_alignment.evidence_item_id
+                    ? {
+                        evidence_item_id: lesson.cf_alignment.evidence_item_id,
+                        evidence_type: lesson.cf_alignment.evidence_type as EvidenceType,
+                    }
+                    : {}),
+            }
+            : undefined
+
+        return {
+            ...lesson,
+            ...overrides,
+            cf_alignment: overrides?.cf_alignment ?? baseAlignment,
+            pages: [...(overrides?.pages ?? lesson.pages)].map((p) => ({ ...p })),
+            metadata: toMutableLessonMetadata(
+                lesson.metadata,
+                overrides?.metadata?.title,
+                overrides?.metadata?.updatedAt
+            ),
+        }
+    };
 
     const makePage = (id: string, title: string): Page => {
         const now = Date.now();
@@ -273,7 +311,6 @@ async function handleNodeAction(payload: { action: string; node: ExplorerNode; n
                 width: 1280,
                 height: 720,
                 background: '#1d293d',
-                display: { columns: '1', rows: '3', gap: '0' },
             },
             metadata: {
                 title,

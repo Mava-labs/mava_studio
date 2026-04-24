@@ -21,12 +21,7 @@
 
 <script setup lang="ts" vapor>
 import { useLayoutStore, type SideNavKey } from '../stores/layout';
-import { useProjectMetadataStore } from '../stores/projectMetadata';
-import { useNotificationStore } from '../stores/notification';
-// import { tooltip } from '../lib/actions/tooltip';
 const layout = useLayoutStore();
-const project = useProjectMetadataStore();
-const notifications = useNotificationStore();
 
 function activateSideNavItem(destination: SideNavKey){
     // if(!project.project) {

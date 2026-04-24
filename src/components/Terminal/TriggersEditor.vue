@@ -1,5 +1,5 @@
 <script setup lang="ts" vapor>
-    import { computed, onUnmounted, ref, watch } from 'vue'
+    import { computed, onUnmounted, ref, useTemplateRef, watch } from 'vue'
     import type * as MonacoNS from 'monaco-editor'
     import { useMonaco } from '../../composables/useMonaco'
     import { useProjectMetadataStore } from '../../stores/projectMetadata'
@@ -81,7 +81,7 @@
     ]
 
     const triggers = computed(() => Object.values(project.dslTriggers ?? {}))
-    const selectedId = ref<string | null>(null)
+    const selectedId = computed(() => terminal.selectedTriggerId)
 
     const selectedTrigger = computed<DSLTriggerDocument | null>(() =>
         selectedId.value ? project.dslTriggers[selectedId.value] ?? null : null
@@ -181,7 +181,7 @@
         }
     })
 
-    const containerRef = ref<HTMLElement | null>(null)
+    const containerRef = useTemplateRef('containerRef')
     const isSaving = ref(false)
     const markerOwner = 'mava-trigger-dsl'
     let validateTimer: ReturnType<typeof setTimeout> | null = null
@@ -627,63 +627,36 @@
         quickFixByMarkerKey.clear()
     })
 
-    function createTrigger(): DSLTriggerDocument {
-        const now = Date.now()
-        const trigger: DSLTriggerDocument = {
-            id: Math.random().toString(36).slice(2),
-            scope: 'global',
-            pageId: null,
-                dslSource: '// Untitled trigger\nwhen page.load\nthen log "Hello"\n',
-            enabled: true,
-            createdAt: now,
-            updatedAt: now,
-            lastError: null,
-        }
 
-        project.upsertDslTrigger(trigger)
-        selectedId.value = trigger.id
-        return trigger
-    }
+    // watch(
+    //     triggers,
+    //     () => {
+    //         if (selectedId.value === null) return
+    //         if (selectedId.value && project.dslTriggers[selectedId.value]) return
+    //         const preferred = terminal.selectedTriggerId
+    //         if (preferred && project.dslTriggers[preferred]) {
+    //             selectedId.value = preferred
+    //             return
+    //         }
+    //         selectedId.value = triggers.value[0]?.id ?? null
+    //     },
+    //     { immediate: true }
+    // )
 
-    watch(
-        triggers,
-        () => {
-            if (selectedId.value === null) return
-            if (selectedId.value && project.dslTriggers[selectedId.value]) return
-            const preferred = terminal.selectedTriggerId
-            if (preferred && project.dslTriggers[preferred]) {
-                selectedId.value = preferred
-                return
-            }
-            selectedId.value = triggers.value[0]?.id ?? null
-        },
-        { immediate: true }
-    )
-
-    watch(
-        selectedId,
-        (id) => {
-            terminal.setSelectedTriggerId(id)
-        },
-        { immediate: true }
-    )
-
-    defineExpose({ createTrigger })
 </script>
 
 <template>
     <div class="script-editor">
         <div class="editor-area bg-slate-950">
-            <div v-if="!selectedTrigger" class="editor-empty">
+            <div v-if="!selectedId" class="editor-empty absolute top-0 right-0 left-0 z-30 bg-slate-950">
                 No trigger selected. Create one to get started.
             </div>
-
-            <div v-else class="editor-shell">
-                <div ref="containerRef" class="editor-mount" />
-
+            
+            <div class="editor-shell">
+                <div ref="containerRef" class="editor-mount"></div>
                 <div v-if="!isReady" class="editor-loading">
                     <div class="editor-loading__card">
-                        <div class="editor-loading__spinner" />
+                        <div class="editor-loading__spinner"></div>
                         <p class="editor-loading__text">Preparing Editor...</p>
                     </div>
                 </div>
@@ -694,18 +667,18 @@
             </div>
         </div>
 
-        <aside class="script-list">
-            <ul>
+        <aside class="trigger-list">
+            <ul class="thin-scroll">
                 <li
                     v-for="trigger in triggerItems"
                     :key="trigger.id"
-                    class="script-item group"
-                    :class="{ 'script-item--active': trigger.id === selectedId }"
-                    @click="selectedId = selectedId === trigger.id ? null : trigger.id"
+                    class="trigger-item group"
+                    :class="selectedId === trigger.id ? 'active-trigger' : 'bg-transparent'"
+                    @click="terminal.setSelectedTriggerId(trigger.id)"
                 >
-                    <span class="script-item__text">
-                        <span class="script-item__label">{{ trigger.title }}</span>
-                        <span class="script-item__summary">{{ trigger.summary }}</span>
+                    <span class="trigger-item__text">
+                        <span class="trigger-item__label">{{ trigger.title }}</span>
+                        <span class="trigger-item__summary">{{ trigger.summary }}</span>
                     </span>
                 </li>
             </ul>
@@ -793,7 +766,7 @@
         padding: 4px 10px;
     }
 
-    .script-list {
+    .trigger-list {
         width: 220px;
         border-left: 1px solid #1f2937;
         display: flex;
@@ -803,14 +776,14 @@
         backdrop-filter: blur(10px);
     }
 
-    .script-list ul {
+    .trigger-list ul {
         list-style: none;
         margin: 0;
         overflow-y: auto;
         flex: 1;
     }
 
-    .script-item {
+    .trigger-item {
         display: flex;
         align-items: flex-start;
         gap: 10px;
@@ -820,16 +793,16 @@
         transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
     }
 
-    .script-item:hover {
+    .trigger-item:hover {
         background: rgba(148, 163, 184, 0.12);
     }
 
-    .script-item--active {
+    .active-trigger {
         background: rgba(14, 165, 233, 0.18);
         color: #f8fafc;
     }
 
-    .script-item__label {
+    .trigger-item__label {
         min-width: 0;
         display: block;
         font-size: 12px;
@@ -837,7 +810,7 @@
         color: inherit;
     }
 
-    .script-item__text {
+    .trigger-item__text {
         min-width: 0;
         flex: 1;
         display: flex;
@@ -845,7 +818,7 @@
         gap: 2px;
     }
 
-    .script-item__summary {
+    .trigger-item__summary {
         min-width: 0;
         display: block;
         color: #64748b;
@@ -860,7 +833,7 @@
         text-overflow: ellipsis;
     }
 
-    .script-item__close {
+    .trigger-item__close {
         flex-shrink: 0;
     }
 

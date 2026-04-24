@@ -61,7 +61,15 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
 
     function setSelectedScriptId(id: string | null) {
-        selectedScriptId.value = id
+        if(selectedScriptId.value == id){
+            selectedScriptId.value = null
+            return
+        }
+        
+        selectedScriptId.value = null
+        setTimeout(() => {
+            selectedScriptId.value = id
+        }, 20)
     }
 
     function setSelectedVariableName(name: string | null) {
@@ -69,7 +77,14 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
 
     function setSelectedTriggerId(id: string | null) {
-        selectedTriggerId.value = id
+        if(selectedTriggerId.value == id) {
+            selectedTriggerId.value = null
+            return
+        }
+        selectedScriptId.value = null
+        setTimeout(() => {
+            selectedTriggerId.value = id
+        }, 20)
     }
 
     function log(level: LogLevel, message: string) {

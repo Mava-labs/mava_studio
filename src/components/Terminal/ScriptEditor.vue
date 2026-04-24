@@ -1,5 +1,5 @@
 <script setup lang="ts" vapor>
-    import { computed, ref, watch } from 'vue'
+    import { computed, ref, useTemplateRef } from 'vue'
     import { useMonaco } from '../../composables/useMonaco'
     import { useProjectMetadataStore } from '../../stores/projectMetadata'
     import { useTerminalStore } from '../../stores/terminal'
@@ -11,12 +11,12 @@
     const terminal = useTerminalStore()
 
     const scripts = computed(() => Object.values(project.actionScripts ?? {}))
-    const selectedId = ref<string | null>(scripts.value[0]?.id ?? null)
+    const selectedId = computed(() => terminal.selectedScriptId)
     const selectedScript = computed<ScriptDef | null>(() =>
         selectedId.value ? project.actionScripts[selectedId.value] ?? null : null
     )
 
-    const containerRef = ref<HTMLElement | null>(null)
+    const containerRef = useTemplateRef('containerRef')
     const isSaving = ref(false)
     const { isReady } = useMonaco(containerRef, selectedScript, {
         onChange(value) {
@@ -49,49 +49,16 @@
         }
     })
 
-    function createScript(): ScriptDef {
-        const id = Math.random().toString(36).slice(2)
-        const script: ScriptDef = {
-            id,
-            name: `Script ${scripts.value.length + 1}`,
-            scope: 'global',
-            codeTs: '// Write your script here\n',
-        }
-
-        project.upsertScript(script)
-        selectedId.value = id
-        return script
-    }
-
-    watch(
-        scripts,
-        () => {
-            if (selectedId.value === null) return
-            if (selectedId.value && project.actionScripts[selectedId.value]) return
-            selectedId.value = scripts.value[0]?.id ?? null
-        },
-        { immediate: true }
-    )
-
-    watch(
-        selectedId,
-        (id) => {
-            terminal.setSelectedScriptId(id)
-        },
-        { immediate: true }
-    )
-
-    defineExpose({ createScript })
 </script>
 
 <template>
     <div class="script-editor bg-slate-950">
         <div class="editor-area bg-slate-950">
-            <div v-if="!selectedScript" class="editor-empty">
+            <div v-if="!selectedScript" class="editor-empty absolute top-0 left-0 right-0 bg-slate-950 z-30">
                 No script selected. Create one to get started.
             </div>
 
-            <div v-else class="editor-shell">
+            <div class="editor-shell">
                 <div ref="containerRef" class="editor-mount" />
 
                 <div v-if="!isReady" class="editor-loading">
@@ -114,7 +81,7 @@
                     :key="script.id"
                     class="script-item group"
                     :class="{ 'script-item--active': script.id === selectedId }"
-                    @click="selectedId = selectedId === script.id ? null : script.id"
+                    @click="terminal.setSelectedScriptId(script.id)"
                 >
                     <span class="script-item__label">{{ script.name }}</span>
                 </li>

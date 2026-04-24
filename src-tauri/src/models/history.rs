@@ -17,7 +17,7 @@ pub struct ScopeRef {
 impl ScopeRef {
     /// Returns the id as a str slice, or empty string for scopes without an id
     /// (project, course, mediaLibrary, scripts, dslTriggers).
-    pub fn scope_id(&self) -> &str {
+    pub fn _scope_id(&self) -> &str {
         self.id.as_deref().unwrap_or("")
     }
 }
@@ -38,7 +38,7 @@ pub struct UndoAction {
 /// A single WAL entry — the serialised state of a scope at a point in time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScopedDiff {
+pub struct _ScopedDiff {
     pub scope_kind: String,
     pub scope_id:   String,
     pub payload:    String, // JSON-encoded scope snapshot
@@ -48,7 +48,7 @@ pub struct ScopedDiff {
 
 /// Row shape read from the history table — internal only, not sent to frontend.
 #[derive(Debug)]
-pub struct HistoryRow {
+pub struct _HistoryRow {
     pub id:         i64,
     pub scope_kind: String,
     pub scope_id:   String,
@@ -60,7 +60,7 @@ pub struct HistoryRow {
 
 /// Row shape read from the snapshots table — internal only.
 #[derive(Debug)]
-pub struct SnapshotRow {
+pub struct _SnapshotRow {
     pub id:         i64,
     pub version:    i64,
     pub label:      String,

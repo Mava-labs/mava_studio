@@ -11,7 +11,7 @@
     import { useNotificationStore } from '../../stores/notification'
     import { useProjectMetadataStore } from '../../stores/projectMetadata'
     import { useVariableStore } from '../../stores/variables'
-    import type { ScriptDef } from '../../types/project'
+    import type { DSLTriggerDocument, ScriptDef } from '../../types/project'
 
     const terminal = useTerminalStore()
     const layout = useLayoutStore()
@@ -98,19 +98,13 @@
             const id = Math.random().toString(36).slice(2)
             const script: ScriptDef = {
                 id,
-                name: `Script ${Object.keys(project.actionScripts ?? {}).length + 1}`,
+                name: `Script_${Object.keys(project.actionScripts ?? {}).length + 1}`,
                 scope: 'global',
                 codeTs: '// Write your script here\n',
             }
+
             project.upsertScript(script)
-            terminal.setTerminalTab('scripts')
-            if (layout.terminalState === 'closed') {
-                if (isTerminalLocked.value) {
-                    notifyTerminalLocked()
-                    return
-                }
-                layout.openTerminal()
-            }
+            terminal.setSelectedScriptId(script.id)
             return
         }
 
@@ -129,25 +123,19 @@
         if (terminal.terminalTab === 'triggers') {
             const now = Date.now()
             const triggerId = Math.random().toString(36).slice(2)
-            project.upsertDslTrigger({
+            const trigger: DSLTriggerDocument = {
                 id: triggerId,
                 scope: 'global',
                 pageId: null,
-                dslSource: '// Untitled trigger\nwhen page.load\nthen log "Hello"\n',
+                dslSource: '// Untitled trigger\non mount [Page_1]\nthen greeting = "Hello"\n',
                 enabled: true,
                 createdAt: now,
                 updatedAt: now,
                 lastError: null,
-            })
-            terminal.setSelectedTriggerId(triggerId)
-
-            if (layout.terminalState === 'closed') {
-                if (isTerminalLocked.value) {
-                    notifyTerminalLocked()
-                    return
-                }
-                layout.openTerminal()
             }
+
+            project.upsertDslTrigger(trigger)
+            terminal.setSelectedTriggerId(trigger.id)
         }
     }
 
@@ -210,7 +198,7 @@
                 <span class="terminal__tab-label">
                     {{ tab.label }}
                     <span
-                        v-if="tab.id === 'output' && terminal.unreadCount > 0"
+                        v-if="tab.id === 'output' && terminal.unreadCount > 0 && terminal.selectedTriggerId"
                         :class="outputDotClass()"
                     ></span>
                 </span>

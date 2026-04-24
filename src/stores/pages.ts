@@ -33,7 +33,6 @@ const DEFAULT_STAGE: Page['stage'] = {
     width: 1280,
     height: 720,
     background: '#1e1e1e',
-    display: { columns: '1', rows: '1', gap: '0' },
 };
 
 /* ============================================================
@@ -138,7 +137,6 @@ export const usePagesStore = defineStore('pages', () => {
                 width: page.stage?.width > 0 ? page.stage.width : DEFAULT_STAGE.width,
                 height: page.stage?.height > 0 ? page.stage.height : DEFAULT_STAGE.height,
                 background: page.stage?.background ?? DEFAULT_STAGE.background,
-                display: page.stage?.display ?? DEFAULT_STAGE.display,
             },
             elements: page.elements ?? {},
             rootIds: page.rootIds ?? [],

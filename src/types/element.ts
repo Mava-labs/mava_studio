@@ -1,4 +1,5 @@
 import { FlexDisplay, GridDisplay } from "./project";
+import type { ElementCFProof } from "./cf-alignment.types";
 
 /* ============================================================
    CORE LAYOUT & RESPONSIVE
@@ -16,9 +17,9 @@ export type Spacing =
 
 export type Size =
     | 'auto'
-    | 'hug'     // content-based
-    | 'fill'    // fill available space
-    | string    // '100px', '50%', etc
+    | 'hug'
+    | 'fill'
+    | string
 
 export interface Layout {
     mode: 'flow' | 'flex' | 'grid',
@@ -26,38 +27,26 @@ export interface Layout {
     transform?: LayoutTransform;
     visible?: boolean;
     locked?: boolean;
-
-    // spacing
     padding?: Spacing
     margin?: Spacing
     gap?: string
-
-    // sizing
     width?: Size
     height?: Size
     minWidth?: string
     maxWidth?: string
     minHeight?: string
     maxHeight?: string
-
-    // flex only
     direction?: 'row' | 'column'
     justify?: string
     align?: string
     wrap?: boolean
-
-    // grid only
     columns?: string
-
-    // positioned only
     x?: string
     y?: string
     z?: number
-
     overflow?: 'visible' | 'hidden' | 'auto'
 }
 
-/** Named breakpoint ids for responsive overrides. */
 export type BreakpointId = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 export type ResponsiveDelta<TStyle> = {
@@ -71,23 +60,19 @@ export type ResponsiveDelta<TStyle> = {
    INTERACTION & EFFECTS
    ============================================================ */
 
-/** Layout-derived animatable properties */
 export interface AnimatableLayoutProps {
     x: number;
     y: number;
     width: number;
     height: number;
-
     rotation: number;
     scaleX: number;
     scaleY: number;
 }
 
-/** Effects-derived animatable properties */
 export interface AnimatableEffectProps {
     opacity: number;
     blur: number;
-
     shadowOffsetX: number;
     shadowOffsetY: number;
     shadowBlur: number;
@@ -96,11 +81,8 @@ export interface AnimatableEffectProps {
 export type AnimatableProps =
     Partial<AnimatableLayoutProps & AnimatableEffectProps>;
 
-
-/** Standard easing keywords for animation timelines. */
 type Easing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 
-/** DOM‑like events we surface for element trigger bindings. */
 export type ElementEvent =
     | 'click'
     | 'dblclick'
@@ -110,34 +92,20 @@ export type ElementEvent =
     | 'pointerup'
     | 'keypress';
 
-/**
- * A trigger binds an event to one or more actions (mini behaviour graph).
- * Actions are intentionally loose (type + params) so new behaviour can be added
- * without requiring a schema migration for existing documents.
-*/
 export type ElementTrigger = {
     id: string;
     event: ElementEvent;
-    /** Ordered list of side‑effects (navigation, animation, property mutation, etc.). */
     actions: Array<{ type: string; params?: Record<string, unknown> }>;
 };
 
-/**
- * Lightweight keyframe animation descriptor.
- * Only simple numeric properties are supported for now (position, size, opacity, rotation).
-*/
 export type ElementAnimation = {
     id: string;
     name?: string;
-    /** Starting property overrides (falls back to current element state if omitted). */
     from?: Partial<AnimatableProps & AnimatableEffectProps>;
-    /** Target property values (only specified keys animate). */
     to: Partial<AnimatableProps & AnimatableEffectProps>;
     duration: number;
-    /** Optional initial delay before playing (ms). */
     delay?: number;
     easing?: Easing;
-    /** If true the animation restarts automatically. */
     loop?: boolean;
 };
 
@@ -155,29 +123,18 @@ export interface Effects {
 /* ============================================================
    BASE ELEMENT
    ============================================================ */
-/**
- * Properties shared by every element variant.
- * Keep this intentionally compact – large optional branches should live in variant style objects.
- */
+
 export interface BaseElement<TStyle> {
     id: string;
     name: string;
     attributes?: Record<string, unknown>;
-
-    /** Structural family */
     kind: 'flatHtml' | 'container' | 'component' | 'svg';
-
-    /** Concrete tag / role */
     type: string;
-
     parentId?: string;
-
     layout: Layout;
     effects: Effects;
-
     style: TStyle;
     responsive?: ResponsiveDelta<TStyle>[];
-
     interaction: {
         triggers: ElementTrigger[];
         animations: ElementAnimation[];
@@ -199,35 +156,28 @@ export type FlatHtml =
     | 'label'
     | 'icon';
 
-
-/** Text style reused by HTML + SVG text overlays */
 export interface TextStyle {
     content: string;
-
     font: {
         family?: string;
         size: number;
         weight?: number | 'normal' | 'bold';
         style?: 'normal' | 'italic';
     };
-
     transform?: 'normal' | 'uppercase' | 'lowercase' | 'capitalize';
     color: string;
     align?: 'left' | 'center' | 'right' | 'justify';
     lineHeight?: number;
     letterSpacing?: number;
     whiteSpace?: 'normal' | 'nowrap' | 'pre-wrap';
-
     decoration: 'underline' | 'line-through' | 'none';
 }
 
 export interface ImageStyle {
     src: string;
     alt?: string;
-
     fit?: 'cover' | 'contain' | 'fill' | 'none';
     position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
-
     filters?: {
         brightness?: number;
         contrast?: number;
@@ -261,7 +211,7 @@ export interface InputStyle {
 }
 
 export interface IconStyle {
-    name: string;        // icon id
+    name: string;
     size?: number;
     color?: string;
 }
@@ -269,10 +219,10 @@ export interface IconStyle {
 export interface FlatHtmlElement extends BaseElement<TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle> {
     kind: 'flatHtml';
     type: FlatHtml;
-};
+}
 
 /* ============================================================
-   CONTAINERS (FLOW / LAYOUT BACKBONE)
+   CONTAINERS
    ============================================================ */
 
 export type ContainerType =
@@ -301,41 +251,44 @@ export interface ContainerStyle {
 export interface ContainerElement extends BaseElement<ContainerStyle> {
     kind: 'container';
     type: ContainerType;
-
     children: string[];
-
-    /** Display & layout rules */
     display:
     | { mode: 'block' }
     | { mode: 'flex'; config: FlexDisplay }
     | { mode: 'grid'; config: GridDisplay };
-
-    /** Optional semantic metadata */
     role?: 'list' | 'form' | 'navigation' | 'section';
 }
 
 /* ============================================================
-   COMPONENT ELEMENTS (VUE-LIKE NODES)
+   COMPONENT ELEMENTS
    ============================================================ */
 
 export interface ComponentElement extends BaseElement<Record<string, unknown>> {
     kind: 'component';
     type: 'component';
-
     componentId: string;
-
-    /** External children (slots) */
     children: string[];
-
-    /** Props passed to component */
     props: Record<string, unknown>;
-
-    /** Slot mapping */
     slots?: Record<string, string[]>;
+
+    /**
+     * CF evidence proof — present only on components that constitute
+     * a CF evidence demand (quiz, video demo, file upload, etc.).
+     *
+     * Only ComponentElements whose componentId appears in
+     * EVIDENCE_COMPONENT_MAP may carry this field.
+     *
+     * The Inspector uses this to establish the PROVEN status of an
+     * evidence demand. Without this, the demand is CLAIMED at best.
+     *
+     * Validated by: validateElementCFProof(componentId, cf_proof)
+     * from cf-alignment.types.ts
+     */
+    cf_proof?: ElementCFProof;
 }
 
 /* ============================================================
-   SVG / SHAPE ELEMENTS (FREEFORM LAYER)
+   SVG / SHAPE ELEMENTS
    ============================================================ */
 
 export type SvgShapeType =
@@ -358,28 +311,22 @@ export type PathCommand =
 
 export interface SvgStyle {
     fill?: string;
-
     stroke?: {
         color: string;
         width: number;
         style?: 'solid' | 'dashed' | 'dotted';
     };
-
     opacity?: number;
-
     radius?: number | {
         tl: number;
         tr: number;
         br: number;
         bl: number;
     };
-
     arrow?: {
         start?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
         end?: 'none' | 'arrow' | 'circle' | 'square' | 'diamond' | 'tee' | 'vee';
     };
-
-    /** Optional embedded text */
     textContent?: {
         text: TextStyle;
         placementH: 'left' | 'center' | 'right';
@@ -391,8 +338,6 @@ export interface SvgStyle {
 export interface SvgElement extends BaseElement<SvgStyle> {
     kind: 'svg';
     type: SvgShapeType;
-
-    /** Geometry payload */
     geometry:
     | { type: 'rect'; width: number; height: number }
     | { type: 'circle'; r: number }
@@ -422,7 +367,6 @@ export interface BorderStyle {
     width: number;
     style: 'solid' | 'dashed' | 'dotted';
 }
-
 
 /* ============================================================
    FINAL ELEMENT UNION

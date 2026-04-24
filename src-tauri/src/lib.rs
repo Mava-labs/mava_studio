@@ -2,6 +2,7 @@ mod db;
 mod models;
 mod commands;
 mod state;
+mod cf;
 
 /// Auto-generated protobuf types from proto/mava.proto via prost-build.
 /// These are NOT a source file — prost compiles them into OUT_DIR at build time.
@@ -13,6 +14,13 @@ pub mod proto {
 
 use state::AppState;
 use tauri::Manager;
+use cf::{
+    cf_cache_framework,
+    cf_mapper_run,
+    cf_inspector_run,
+    cf_get_brief,
+    cf_list_cached_frameworks,
+};
 
 use commands::{
     project::{
@@ -78,6 +86,15 @@ pub fn run() {
             // Undo / redo persistence
             flush_undo_entry,
             load_undo_entry,
+
+            // Competence Framework
+            cf_cache_framework,
+            cf_mapper_run,
+            cf_inspector_run,
+            cf_get_brief,
+            cf_list_cached_frameworks,
+
+            
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

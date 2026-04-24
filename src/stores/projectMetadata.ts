@@ -31,6 +31,7 @@ import type {
     ScriptDef,
 } from '../types/project';
 import type { Element } from '../types/element';
+import { VariableDef } from '../types/variables';
 
 /* ============================================================
    SUPPLEMENTARY TYPES
@@ -260,6 +261,7 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
     const mediaLibrary     = ref<Record<string, MediaAsset>>({});
     const dslTriggers      = ref<Record<string, DSLTriggerDocument>>({});
     const actionScripts    = ref<Record<string, ScriptDef>>({});
+    const variables        = ref<Record<string, VariableDef>>({})
 
     /* ----------------------------------------------------------
        STATE — CF STUBS
