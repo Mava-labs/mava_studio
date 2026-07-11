@@ -61,14 +61,16 @@
 <script setup lang="ts" vapor>
     import { computed, ref, watch } from 'vue';
     import { useActiveElement } from '../../../composables/useActiveElement';
+    import { hasPaddingCapability } from '../../../utils/elementCapabilities';
 
     const { element, update } = useActiveElement();
 
     const padding = computed(() => {
         const el = element.value;
-        if (!el) return null;
-        const p = (el.style as any)?.padding;
-        if (p === undefined) return null;
+        /** Type-based eligibility, not key-presence — see elementCapabilities.ts for why. */
+        if (!hasPaddingCapability(el)) return null;
+        const p = (el!.style as any)?.padding;
+        if (p === undefined) return { top: 0, right: 0, bottom: 0, left: 0 };
         if (typeof p === 'number') return { top: p, right: p, bottom: p, left: p };
         return p as { top: number; right: number; bottom: number; left: number };
     });

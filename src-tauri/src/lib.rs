@@ -32,6 +32,7 @@ use commands::{
     pages::{load_page, save_page},
     history::{flush_scope_wal, autosave_scope, commit_snapshot, reconstruct_version},
     undo::{flush_undo_entry, load_undo_entry},
+    media::{import_media_asset, extract_media_blob},
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -86,6 +87,10 @@ pub fn run() {
             // Undo / redo persistence
             flush_undo_entry,
             load_undo_entry,
+
+            // Media (content-addressed blob storage inside the .mava file)
+            import_media_asset,
+            extract_media_blob,
 
             // Competence Framework
             cf_cache_framework,

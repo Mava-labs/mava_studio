@@ -1,13 +1,12 @@
 <template>
     <div class="panel-root px-3">
         <div class="section-head">
-            <h3 class="section-title">Effects</h3>
+            <h3 class="section-title">Opacity</h3>
             <span class="badge">Live</span>
         </div>
 
         <div class="flex flex-col gap-3 mt-3">
             <div class="control-row">
-                <span class="clab">Opacity</span>
                 <div class="sliderRow">
                     <input type="range" min="0" max="100" step="1" class="range" v-model.number="opacityPercent" aria-label="Opacity" />
                     <div class="num">
@@ -16,21 +15,6 @@
                         <div class="steppers">
                             <button class="step" type="button" @click="opacityPercent = Math.min(100, opacityPercent + 1)">▴</button>
                             <button class="step" type="button" @click="opacityPercent = Math.max(0, opacityPercent - 1)">▾</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="control-row">
-                <span class="clab">Blur</span>
-                <div class="sliderRow">
-                    <input type="range" min="0" max="40" step="1" class="range" v-model.number="blurPx" aria-label="Blur" />
-                    <div class="num">
-                        <input type="number" min="0" max="40" step="1" v-model.number="blurPx" />
-                        <span class="unit">px</span>
-                        <div class="steppers">
-                            <button class="step" type="button" @click="blurPx = Math.min(40, blurPx + 1)">▴</button>
-                            <button class="step" type="button" @click="blurPx = Math.max(0, blurPx - 1)">▾</button>
                         </div>
                     </div>
                 </div>
@@ -50,14 +34,6 @@
         set: (val: number) => {
             const v = Math.min(100, Math.max(0, Number.isFinite(val) ? val : 0));
             update({ effects: { opacity: v / 100 } });
-        },
-    });
-
-    const blurPx = computed({
-        get: () => Math.round(element.value?.effects.blur ?? 0),
-        set: (val: number) => {
-            const v = Math.min(40, Math.max(0, Number.isFinite(val) ? val : 0));
-            update({ effects: { blur: v } });
         },
     });
 </script>

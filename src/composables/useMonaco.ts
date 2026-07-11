@@ -33,7 +33,8 @@ declare const project: {
     [variable: string]: unknown
 }
 
-declare function element(id: string): ElementAPI
+/** Get an element by the name you gave it in the editor (e.g. element("Submit Button")). */
+declare function element(name: string): ElementAPI
 
 declare function fetch(url: string, options?: RequestInit): Promise<Response>
 
@@ -278,6 +279,11 @@ export function useMonaco(
                 fontFamily: 'JetBrains Mono, Fira Code, monospace',
                 scrollBeyondLastLine: false,
                 tabSize: 4,
+                // Indent with real tab characters, not spaces — one indent = one
+                // tab. detectIndentation off so it doesn't silently switch back
+                // to spaces based on existing content.
+                insertSpaces: false,
+                detectIndentation: false,
                 padding: { top: 12 },
             })
             monaco.editor.setTheme('abyss')

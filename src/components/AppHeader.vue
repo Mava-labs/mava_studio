@@ -83,6 +83,14 @@
 
                                 <!-- Project-open-only section -->
                                 <li class="border-t border-gray-100 dark:border-gray-600">
+                                    <button type="button"
+                                        :disabled="!project.isProjectOpen || isPreviewing"
+                                        class="menu-item disabled:opacity-40 disabled:pointer-events-none"
+                                        @click="handlePreview">
+                                        {{ isPreviewing ? 'Opening preview…' : 'Preview' }}
+                                    </button>
+                                </li>
+                                <li>
                                     <button type="button" :disabled="!project.isProjectOpen"
                                         class="menu-item flex items-center justify-between disabled:opacity-40 disabled:pointer-events-none"
                                         @click="handleSave">
@@ -119,10 +127,10 @@
                         </div>
                     </li>
 
-                    <!-- Publish -->
-                    <li v-for="item in navFileItems" :key="item.name" class="cursor-pointer">
-                        <button type="button" class="flex items-center flex-col space-y-1"
-                            @click="() => handleFileNav(item.name)">
+                    <!-- Publish — not implemented yet; disabled rather than faking success -->
+                    <li v-for="item in navFileItems" :key="item.name" class="cursor-not-allowed" :title="`${item.name} — coming soon`">
+                        <button type="button" disabled
+                            class="flex items-center flex-col space-y-1 opacity-40 cursor-not-allowed">
                             <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true"
                                 xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor"
                                 viewBox="0 0 24 24">
@@ -135,8 +143,10 @@
             </nav>
 
             <!-- Project name centre -->
-            <div class="text-sm text-gray-500 dark:text-gray-400 select-none">
-                {{ project.projectName || '' }}
+            <div class="text-sm text-gray-500 dark:text-gray-400 select-none flex items-center gap-1.5">
+                <span>{{ project.projectName || '' }}</span>
+                <span v-if="project.hasDirtyScopes" class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+                    title="Unsaved changes" aria-label="Unsaved changes"></span>
             </div>
 
             <!-- Right nav -->
@@ -199,9 +209,8 @@
                                         @click="() => chooseStage('template')">Template</button>
                                 </li>
                                 <li>
-                                    <button type="button" :disabled="!project.isProjectOpen"
-                                        class="menu-item disabled:opacity-40 disabled:pointer-events-none"
-                                        @click="() => chooseStage('animate')">Animate</button>
+                                    <button type="button" disabled title="Animate mode is still being designed — coming soon"
+                                        class="menu-item disabled:opacity-40 disabled:pointer-events-none">Animate</button>
                                 </li>
                             </ul>
                         </div>
@@ -220,12 +229,13 @@
 </style>
 
 <script setup lang="ts" vapor>
-    import { computed, onMounted, onBeforeUnmount } from 'vue';
+    import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
     import { useLayoutStore, type RightUtilKey } from '../stores/layout';
     import { useStageStore, type StageKey } from '../stores/stage';
     import { useNotificationStore } from '../stores/notification';
     import { useProjectMetadataStore } from '../stores/projectMetadata';
     import { useProjectLifecycle } from '../composables/useProjectLifecycle';
+    import { usePreview } from '../composables/usePreview';
     import { useTerminalStore } from '../stores/terminal';
 
     const layout = useLayoutStore();
@@ -233,7 +243,9 @@
     const stage = useStageStore();
     const project = useProjectMetadataStore();
     const lifecycle = useProjectLifecycle();
+    const preview = usePreview();
     const terminal = useTerminalStore();
+    const isPreviewing = ref(false);
 
     const recentProjects = computed(() => project.recentProjects);
 
@@ -259,6 +271,16 @@
         document.removeEventListener('click', onProjectOutside);
     }
 
+    async function handlePreview() {
+        closeProjectMenu();
+        if (isPreviewing.value) return;
+        isPreviewing.value = true;
+        try {
+            await preview.openPreview();
+        } finally {
+            isPreviewing.value = false;
+        }
+    }
     async function handleCreate() { closeProjectMenu(); await lifecycle.createProject(); }
     async function handleOpen() { closeProjectMenu(); await lifecycle.openProject(); }
     async function handleOpenRecent(p: string) { closeProjectMenu(); await lifecycle.openProject(p); }
@@ -267,21 +289,6 @@
     async function handleSaveAs() { closeProjectMenu(); await lifecycle.saveAs(); }
     async function handleReveal() { closeProjectMenu(); await lifecycle.revealInExplorer(); }
     async function handleClose() { closeProjectMenu(); await lifecycle.closeProject(); }
-
-    // ── File nav ───────────────────────────────────────────────────────────────
-
-    async function handleFileNav(name: string) {
-        if (name === 'Publish') {
-            const note = notification.addNotification('Building publish bundle…', { type: 'info', ttl: 1500 });
-            try {
-                notification.addNotification('Publish bundle downloaded', { type: 'info' });
-            } catch (err: any) {
-                notification.addNotification(`Publish failed: ${err?.message ?? err}`, { type: 'error', ttl: 6000 });
-            } finally {
-                if (note) notification.dismissNotification(note);
-            }
-        }
-    }
 
     // ── Stage (Context menu) ───────────────────────────────────────────────────
 

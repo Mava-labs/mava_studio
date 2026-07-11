@@ -65,6 +65,7 @@ export function useUndoRedo() {
                 case 'mediaLibrary':
                 case 'scripts':
                 case 'dslTriggers':
+                case 'variables':
                     // projectMetadata owns these — delegate restoration
                     project.restoreScope(scope, parsed);
                     break;

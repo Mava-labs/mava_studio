@@ -9,6 +9,7 @@ import { usePagesStore } from "../../stores/pages";
 import { useLayoutStore } from "../../stores/layout";
 import { useNotificationStore } from "../../stores/notification";
 import { useElementStore } from "../../stores/element";
+import { useEditorSelection } from "../../composables/useEditorSelection";
 import type { Element } from "../../types/element";
 import { type Module, type Lesson, type Page } from "../../types/project";
 import type { EvidenceType } from "../../types/cf-alignment.types";
@@ -46,6 +47,7 @@ const pages = usePagesStore();
 const layout = useLayoutStore();
 const notification = useNotificationStore();
 const elements = useElementStore();
+const { clearSelection, selectOnly } = useEditorSelection();
 
 const clipboard = ref<{ action: 'copy' | 'cut'; node: ExplorerNode } | null>(null);
 const explorerScrollRef = ref<HTMLElement | null>(null);
@@ -184,8 +186,31 @@ function buildOutlineTree(
         .filter((node): node is OutlineNode => Boolean(node));
 }
 
+/**
+ * Clicking the already-selected row should deselect — same as clicking
+ * empty canvas — rather than just re-selecting the same id (a visible no-op
+ * that made the outline feel like it couldn't ever deselect anything, only
+ * clicking the canvas background could). Goes through useEditorSelection.ts's
+ * clearSelection() specifically, not a direct elements.setActiveElement(null)
+ * — canvas deselection also clears the multi-select set, and this should
+ * match that exactly rather than leaving a stale multi-selection behind.
+ *
+ * Selecting also goes through useEditorSelection's selectOnly() now, not a
+ * bare elements.setActiveElement(id) — that only ever set activeElementId,
+ * never touching selectedIds (the module-level Set the canvas ring,
+ * drag-to-move, and useDeleteSelection.ts's Delete/Backspace handler all
+ * actually read from). Selecting an element from this panel looked like it
+ * worked (the Properties panel updated, since that reads activeElementId
+ * directly) but silently didn't produce a canvas ring, and Delete/Backspace
+ * would find an empty selectedIds and do nothing — the reported bug.
+ */
 function handleOutlineSelect(id: string) {
-    elements.setActiveElement(id);
+    if (elements.activeElementId === id) {
+        clearSelection();
+        return;
+    }
+
+    selectOnly(id);
 
     const page = activePage.value;
     if (!page) return;

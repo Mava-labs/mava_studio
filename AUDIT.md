@@ -1,17 +1,16 @@
-# Mava Studio — Codebase Audit & Readiness Assessment
+# Mava Studio — Codebase Audit & Readiness Assessment (Refresh)
 
-**Date:** 2026-03-10
-**Branch:** `staging`
-**Last Commit:** `13dc064 Style panel UI polish`
+**Date:** 2026-07-08
+**Supersedes:** the 2026-03-10 audit in this same file (that version is preserved in git history / `staging` commit `13dc064`)
+**Method:** direct source read of `src/` and `src-tauri/src/`, cross-checked against the prior audit's claims rather than trusting them. Several March claims are now wrong — corrected below and marked ⟲.
 
 ---
 
 ## 1. Project Identity
 
-Mava Studio is a **desktop-native academic course authoring tool** built on **Tauri v2 + Vue 3 Vapor + Pinia**. Its purpose is to let authors construct courses through a visual canvas—laying out markup, wiring interactions, linking to competence frameworks, and publishing to web-standard output or a controlled ecosystem outlet.
+Unchanged: Mava Studio is a desktop-native academic course authoring tool (Tauri v2 + Vue 3 Vapor + Pinia). Core loop is still `Create Mode → Interactions & Triggers → Scene Simulations/Animations → CF Mapping & Inspector → Publish`.
 
-**Core authoring loop:**
-`Create Mode (markup/layout)` → `Interactions & Triggers` → `Scene Simulations/Animations` → `CF Mapping & Inspector` → `Publish (web output / .mava archive)`
+What's changed since March: the CF (Competence Framework) leg of that loop went from "not started" to genuinely implemented end to end, and a full interaction-DSL toolchain (lexer/parser/validator/Monaco integration) was built, though not yet connected to runtime execution.
 
 ---
 
@@ -20,276 +19,117 @@ Mava Studio is a **desktop-native academic course authoring tool** built on **Ta
 ```
 Tauri (Rust backend)
  └── Vue 3 Vapor (no virtual DOM)
-      ├── Pinia stores (persisted to Tauri Store plugin)
-      ├── Imperative DOM mounter (bypasses Vue for canvas elements)
+      ├── Pinia stores (persisted to Tauri Store plugin) — 11 stores, up from 7
+      ├── render-bridge.ts / resolver.ts — imperative Vapor renderer
+      │    (replaces the old element.mounter.ts, which no longer exists)
       ├── Store-driven navigation (no vue-router)
       └── Tailwind CSS
 ```
 
-**File structure:**
+**File structure (current):**
 ```
 src/
 ├── App.vue                          Shell (grid layout, mode switching)
-├── main.ts                          Entry (createVaporApp + Pinia)
-├── mods/                            Mode views (create, template, animate, empty)
+├── mods/                            create, template (stub), animate (stub), empty
 ├── components/
-│   ├── AppHeader.vue                Top bar (nav, publish, context)
-│   ├── SideNav.vue                  Left icon bar (7 nav keys)
-│   ├── NavAssociates.vue            Contextual side panel router
-│   ├── RightUtilities.vue           Right panel router
-│   ├── SideNavigation/              Explorer, Elements, Structure trees
-│   └── RightPanel/                  Style/property editing panels
-├── stores/                          7 Pinia stores
-├── types/                           Element, Project, StyleInspector
-├── utils/                           DOM mounter, builders, disk I/O, archive
-└── composables/                     useActiveElement
+│   ├── AppHeader.vue                Top bar (nav, publish [fake], context)
+│   ├── SideNav.vue / NavAssociates.vue / RightUtilities.vue
+│   ├── SideNavigation/
+│   │   ├── Structure/, ElementsPanel.vue         (unchanged, complete)
+│   │   └── cf/                      NEW — mapper/ + inspector/ (9 files, real)
+│   ├── RightPanel/                  Style/property panels (mostly unchanged)
+│   ├── Terminal/                    NEW — TriggersEditor, ScriptEditor,
+│   │                                 VariablesRegistry, OutputLog, TerminalPanel
+│   └── renderers/                   render-bridge/resolver (live) +
+│                                     Container/FlatHtml/Svg/ComponentRenderer.vue
+│                                     (dead — see §6)
+├── stores/                          11: + palette, terminal, variables,
+│                                     useCfStore, useCfMapperStore
+├── composables/                     14, up from 1: useAutosave, useUndoRedo,
+│                                     useProjectLifecycle, useEditorSelection,
+│                                     useMonaco, useElementTriggers, useCfStore
+│                                     helpers, useComponentEditor, usePageSwitcher,
+│                                     etc. (two of these are orphaned — see §6)
+├── utils/
+│   ├── Trigger/                     NEW — lexer.ts, parser.ts, ast.ts,
+│   │                                 validator.ts, summarizer.ts, codegen.ts
+│   │                                 (~4200 lines, implements TRIGGER_DSL_SPEC.txt)
+│   └── scripts/                     NEW — runner.ts (real `new Function(...)`
+│                                     execution), compiler worker
+└── types/                           + cf.types.ts, cf-alignment.types.ts, variables.ts
+
+src-tauri/src/
+├── cf/                              types, validation, cache, mapper, inspector,
+│                                     commands — real, tested (8 unit tests)
+├── commands/                        project, pages, history (WAL), undo
+├── db/                              mod.rs (2 SQLite pools, WAL mode),
+│                                     migrations.rs (versioned schema)
+└── proto/mava.proto                 596-line schema, compiled, UNUSED at runtime
 ```
 
-**Data hierarchy:**
-```
-ProjectData → Course → Module[] → Lesson[] → Page[] → Element[]
-                                                        ├── FlatHtml (text, image, video, audio, button, input...)
-                                                        ├── Container (div, section, form, list, group...)
-                                                        ├── Component (reusable with slots/props)
-                                                        └── SVG (rect, circle, polygon, star, path, hotspot...)
-```
+**Data hierarchy:** unchanged (`Course → Module[] → Lesson[] → Page[] → Element[]`).
 
 ---
 
 ## 3. What's Complete & Done Right
 
-### 3.1 Type System & Data Modeling ✓
-| Item | Assessment |
-|------|------------|
-| `types/element.ts` — Full element union type (FlatHtml, Container, Component, SVG) | **Solid.** Well-separated by kind with discriminated unions. |
-| `types/project.ts` — Hierarchical Course → Module → Lesson → Page model | **Solid.** Includes CF node ID slots (`cfNodeIds`), lesson types (activity/assessment), prerequisites, metadata timestamps. |
-| Responsive delta system (`ResponsiveDelta<TStyle>`) | **Defined** but not wired into any UI or rendering. |
-| Interaction model (triggers + animations) | **Well-designed.** Event-driven with open action registry. |
-| Schema versioning (`CURRENT_PROJECT_VERSION`) | **Present.** No migration logic yet. |
+Everything the March audit marked complete is still complete (type system, disk I/O scaffolding, `.mava` archive, canvas rendering primitives, the full style-panel ecosystem, structure/explorer/outline trees, animation engine, notifications). New since March:
 
-### 3.2 Project Persistence & Disk I/O ✓
 | Item | Assessment |
 |------|------------|
-| `createProjectAndPersist()` — scaffolds full directory structure | **Complete.** Creates modules/, lessons/, pages/, scripts/, triggers/, assets/ on disk. |
-| Page load/save cycle (`pages.ts`) | **Complete.** Load from JSON, cache in memory, normalize stage defaults, save back. |
-| `.mava` archive pack/extract via Rust backend | **Complete.** Rust ZIP handler works. |
-| Pinia persistence via Tauri Store plugin | **Complete.** Custom storage adapter wired. |
-
-### 3.3 Canvas & Element Rendering ✓
-| Item | Assessment |
-|------|------------|
-| Imperative DOM mounter (`element.mounter.ts`) | **Complete.** Creates HTML/SVG/Container nodes, applies all style types, patches in-place, handles recursive children. |
-| Element builder factory (`element.builder.ts`) | **Complete.** Builder functions for all major element types. |
-| Element store — add, remove, update with surgical DOM sync | **Complete.** Insertion logic handles root, sibling, child positions. Update merges partial patches and applies to live DOM without remounting. |
-| SVG geometry rendering (rect, circle, ellipse, line, polygon, star, arrow, path, hotspot) | **Complete.** All 9 geometry types generate proper SVG markup. |
-| Canvas rulers (H/V) with DPI-aware ticks | **Complete.** 100px major, 10px minor, drawn to HTML canvas. |
-| Dot-grid background | **Complete.** |
-
-### 3.4 Style Panel Ecosystem ✓
-| Item | Assessment |
-|------|------------|
-| `LayoutPanel` — X/Y/W/H with flow/absolute awareness | **Complete.** |
-| `TransformPanel` — ScaleX, ScaleY, Rotation | **Complete.** |
-| `EffectsPanel` — Opacity slider, Blur slider | **Complete.** |
-| `TextPanel` — Font, size, weight, color, alignment, decoration, transform, line-height, letter-spacing | **Complete.** Full text editing. |
-| `ImagePanel` — Fit mode, brightness, contrast, grayscale, blur | **Complete.** |
-| `FillStroke` — Fill color, stroke color/width/style | **Complete.** |
-| `RadiusPanel` — Per-corner border radius with linked toggle | **Complete.** |
-| `PaddingPanel` — Per-side padding with linked toggle | **Complete.** |
-| `StylePanel` (container) — Conditional panel routing by element kind/type | **Complete.** |
-| `useActiveElement` composable — clean access to selected element + update function | **Complete.** |
-
-### 3.5 Project Structure (Explorer) ✓
-| Item | Assessment |
-|------|------------|
-| `StructurePanel` — Full file tree (course > modules > lessons > pages) | **Complete.** Reads from disk, builds tree, supports CRUD. |
-| Create lesson/page on disk with JSON persistence | **Complete.** |
-| Rename, delete, copy, cut with Tauri FS | **Complete.** |
-| `ExplorerItem` — context menu, inline rename, kind-based color badges | **Complete.** |
-| `OutlineTree` — DOM-like element tree for the active page | **Complete.** |
-| Page tabs in CreateMode (VS Code-style) | **Complete.** |
-
-### 3.6 Animation & Interaction Engine ✓
-| Item | Assessment |
-|------|------------|
-| `element.animations.ts` — Web Animations API driver | **Complete.** Plays keyframe animations, supports from/to, delay, easing, loop, concurrent playback, per-element cancellation. |
-| `element.actions.ts` — Open action registry with async dispatcher | **Complete.** `registerAction()` / `dispatchActions()` pattern ready. |
-| Trigger wiring on mount (event → actions pipeline) | **Complete.** Auto-wired on element mount, cleanup on unmount. |
-| Autoplay vs trigger-bound animation separation | **Complete.** |
-
-### 3.7 Notification System ✓
-| Item | Assessment |
-|------|------------|
-| `NotificationsTray` + `notification.ts` store | **Complete.** Info/warn/error toasts with auto-dismiss. |
+| **⟲ Open existing project** | **Complete.** `mods/emptyProject.vue` has working "New blank project" / "Open project" actions via `useProjectLifecycle`, a real recent-projects list with reopen/remove, backed by `get_recent_projects`/`remove_recent_project`. March said this showed a "coming soon" toast — no longer true. |
+| **⟲ Auto-save + dirty tracking (backend + wiring)** | **Complete as data flow.** `useAutosave.ts` debounces (2s) and calls `autosave_scope`; wired into `useProjectLifecycle` on create/open/close. `dirtyScopes`/`markDirty` in `projectMetadata.ts` is real and called from dozens of mutators. **Missing:** no "unsaved changes" UI indicator anywhere. |
+| **⟲ Undo/redo data layer** | **Complete but disconnected.** `stores/projectMetadata.ts` has a real undo/redo stack (`pushUndo`, `undo()`, `redo()`), `stores/element.ts` pushes onto it on every mutation, and `composables/useUndoRedo.ts` is a fully built dispatcher. All of `flush_undo_entry`, `load_undo_entry`, `commit_snapshot`, `reconstruct_version` are actually called from the frontend. The stack **is being populated correctly as the user works** — see §4 for why it's not usable yet. |
+| **⟲ CF (Competence Framework) integration — backend** | **Complete, real, tested.** `src-tauri/src/cf/` — types, checksum validation (SHA-256 over canonicalized JSON), filesystem cache, `mapper.rs` (real `CourseBrief` computation: indexed competencies/indicators/evidence, domain map, prerequisite graph, cross-framework dependency detection), `inspector.rs` (real 4-section report: compatibility, coverage, assessment quality, integrity posture, publish-readiness). 8 genuine unit tests. |
+| **⟲ CF integration — frontend** | **Complete for local workflow.** `useCfStore.ts` / `useCfMapperStore.ts` drive real `MapperPanel.vue` / `InspectorPanel.vue` UIs (health bar, strictness selector, coverage list, quality/compatibility sections) off live store state. Local framework import (file picker → `readTextFile` → `importFramework()`) works end to end. Only the *hosted registry browse/search* is stubbed (`STUB_REGISTRY` local arrays, explicitly commented as such). |
+| **Trigger DSL — authoring toolchain** | **Complete as an editor feature.** Real lexer (407 lines), parser (1003 lines), AST, validator (841 lines) implementing the full `TRIGGER_DSL_SPEC.txt` grammar including its ~23 error codes; a real Monarch tokenizer registered in `useMonaco.ts` gives live syntax highlighting + diagnostics in `TriggersEditor.vue`. Authors can write and get validated DSL today. **Not yet connected to execution** — see §4. |
+| **TypeScript script execution** | **Complete.** `utils/scripts/runner.ts` genuinely compiles and runs author scripts (`new Function('stage','project','element','fetch', compiledJs)`), registered into the action registry — separate from and unrelated to the DSL trigger system. |
+| **Rust project lifecycle** | **Complete.** All 8 commands in `commands/project.rs` are fully implemented, including OS-specific `reveal_in_explorer`, WAL checkpoint-before-copy on Save As, and backward-compat auto-migration of old project hierarchies on load. |
+| **SQLite schema + migrations** | **Complete.** Two WAL-mode pools (project + app-state), a real versioned migration system (`meta.schema_version`), tables for `document`, `pages`, `history`, `snapshots`, `undo_log`, `recent_projects`. |
 
 ---
 
 ## 4. What's Partially Built (In Progress)
 
-### 4.1 Create Mode Canvas
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| **Element selection UX** | Click-to-select works; no visual selection handles (resize grips, rotation handle) | Need selection overlay with resize/rotate handles, bounding box |
-| **Drag to move** | Pointer events wired but `moveElement` is commented out (`console.log` placeholder) | Wire actual position update on drag end |
-| **Drag-and-drop reparenting** | Drop target highlighting exists, actual DOM move commented out | Complete reparenting logic |
-| **Multi-select** | `UnifiedToolbar` UI built for `multiselect` mode but all alignment/group/distribute functions are stubbed (empty bodies) | Implement alignment, distribution, grouping logic |
-| **Text inline editing** | Not implemented — text content only editable via style panel input | Need contenteditable or overlay editor on double-click |
-| **Image source picker** | ImagePanel has `src` field but no file picker or asset browser integration | Wire Tauri file dialog or asset panel |
-| **Copy/Paste elements** | Not implemented on canvas | Need clipboard CRUD |
-| **Undo/Redo** | Commented out in App.vue; `HistoryMeta` type exists in project.ts | Need command history stack |
-| **Keyboard shortcuts** | Delete shortcut commented out; no others | Need shortcut manager |
+### 4.1 Undo/Redo — the one item where "data layer done" ≠ "feature usable"
+The entire pipeline works except the last step: `App.vue`'s keydown handler still literally reads `// TODO: implement undo logic` / `// TODO: implement redo logic` and never calls `useUndoRedo()` or `project.undo()/redo()`. **This is now a small, well-scoped task** — wire an existing, working composable to an existing keyboard handler — not the ground-up feature the March audit implied.
 
-### 4.2 AppHeader / Publish
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| **Publish flow** | Button exists; `publishProject()` call is commented out | Need full build pipeline: validate → bundle static HTML/CSS/JS → pack archive → optional upload |
-| **Project menu** | Button exists, does nothing | Need open/close/save/save-as/recent |
+### 4.2 History/WAL reconstruction — real but naive
+`reconstruct_version` and `autosave_scope` (`commands/history.rs`) work and are exercised by real callers, but both explicitly punt on field-level merging (their own code comments: *"For now we store the full document blob... when proto is fully wired, apply field-level merging here"*). Today, reconstructing a version returns whichever single WAL row is last-in-range (or the base snapshot) — whole-blob last-write-wins, not a true diff-apply. Fine for current usage, will not scale to concurrent/partial scope edits.
 
-### 4.3 Right Panel
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| **PropertiesPanel** | Empty `<div>` | Need element metadata editor (name, semantic role, accessibility props, CF links) |
-| **DSLActionsPanel** | Visual scaffold only — hardcoded data, all buttons disabled | Need trigger/variable CRUD, DSL editor, action binding UI |
-| **ColorPicker** | Chip renders but `openPicker` body is commented out | Need palette picker or full color picker popup |
-| **Device/responsive preview** | Dropdown in StylePanel "no element" state, mostly commented out | Need breakpoint switcher + responsive preview resizing |
+### 4.3 Trigger DSL — authored but not executable
+`codegen.ts` (759 lines, compiles validated DSL AST → JS glue) exists but is **never called** from anywhere else in the codebase. The actual runtime trigger execution path (`useElementTriggers.ts`) still runs against the older structured `ElementTrigger[]` model, not DSL output. Net state: authors can write, get syntax-highlighted, and get validated DSL in the Terminal panel — but it has no effect on the running project yet. Bridging `codegen()` output into `useElementTriggers` is the key remaining task here, not building a parser (that part's done).
 
-### 4.4 Side Navigation
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| **Components panel** | Placeholder text | Need component library: create, edit, instantiate reusable components |
-| **CF Map panel** | Placeholder text | Need competence framework mapper (see Section 5) |
-| **Assets panel** | Placeholder text | Need asset manager: import/organize images, videos, audio, documents |
-| **Inspector panel** | Placeholder text | Need course-level inspector/validator (see Section 5) |
-| **Animations panel** | Placeholder text | Need timeline editor for animation sequencing |
+### 4.4 Canvas UX — essentially unchanged from March
+Selection is a plain outline ring (`EditorOverlay.vue`) — no resize/rotate grips. No drag-to-move, no drag-and-drop reparenting (grep confirms zero handlers). `UnifiedToolbar.vue`'s multi-select/align/distribute/group UI is complete but every handler body is commented out. No inline text editing, no canvas copy/paste, delete shortcut still commented out in `App.vue`.
 
-### 4.5 Template Mode & Animate Mode
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| **TemplateMode** | Stub — heading only | Full template system design needed |
-| **AnimateMode** | Stub — heading only; not wired into App.vue v-if chain | Full animation workspace design needed |
+### 4.5 CF Mapper marketplace
+Local import/inspect is real; the hosted-registry browse/search UI (`MapperBrowseView.vue` et al.) runs against `STUB_REGISTRY`/`STUB_DETAILS` local arrays pending a real API — this is presumably meant to eventually call `mava-registry`'s `registry` module (see the sibling project), which already exists and is a real Axum service.
 
-### 4.6 ElementsPanel Visual Polish
-| Gap | Current State | Work Remaining |
-|-----|---------------|----------------|
-| Element insert items | Text labels in grid cells ("Rectangle", "Text", etc.) | Replace with SVG icons or thumbnail previews |
+### 4.6 AppHeader / Publish — worse than "stubbed," it's actively misleading
+`handleFileNav('Publish')` shows a **fake success sequence** ("Building publish bundle…" → "Publish bundle downloaded") with zero actual work behind it — no `invoke`, no bundler call, `publishProject()` doesn't exist anywhere. This is a UX risk: it currently tells the user something succeeded that never happened. Project menu (open/close/save/save-as/recent) is still a no-op button.
+
+### 4.7 Right Panel stubs — unchanged from March
+`PropertiesPanel.vue` is an empty div. `DSLActionsPanel.vue` is a hardcoded 4-row fake list, explicitly commented "shell... once stores are ported" — note this is a *different, dead* component from the real DSL system that now lives in `components/Terminal/`. `ColorPicker.vue`'s `openPicker()` is still commented out.
+
+### 4.8 Side Navigation placeholders — narrower than March, not gone
+Components, Assets, and Animations panels in `NavAssociates.vue` are still literal placeholder divs. Notably, **Assets has real backend-adjacent data (`mediaLibrary` CRUD in `projectMetadata.ts`) with zero UI on top of it** — the model is ready, only the panel is missing. CF Map and Inspector are no longer placeholders (see §3).
+
+### 4.9 Template Mode & Animate Mode — unchanged, plus a new dangling reference
+Both are still heading-only stubs. New finding: `AppHeader.vue`'s context dropdown lets a user select `chooseStage('animate')`, which sets `stage.currentStage = 'animate'` — but `App.vue`'s render chain has no `v-else-if` for `'animate'`, so the app silently falls through to `EmptyProject`. Small but real UX bug: a working-looking menu item leads nowhere.
 
 ---
 
 ## 5. What Wasn't Thought Of But Is Necessary
 
-These are capabilities the codebase doesn't address at all — no types, no stubs, no placeholders — but are essential for the described product.
+Mostly unchanged from March, with two items resolved (CF integration, DSL authoring) and one new addition:
 
-### 5.1 Critical for MVP
+**Still fully missing:** rich text editing (no contenteditable/WYSIWYG — text is still a single style-panel input), asset/media manager (no file picker anywhere for images/video/audio — `ImagePanel`/`MediaPanel` only take a raw URL string despite `mediaLibrary` existing in the store), a functional component library (`ComponentElement` resolves via `resolver.ts` but `createMode.vue` always provides an empty `componentLibrary`, so component instances can never resolve to anything), a real publish/export pipeline, SCORM/xAPI packaging, assessment authoring (question types/scoring/rubrics), a variable/state-machine engine for scene simulation, accessibility tooling, i18n, collaboration/auth, and a test suite + CI (still effectively zero: one `lexer.test.ts` with no assertions and no test runner configured; Rust has 8 real tests but only in the CF module — none for project/pages/history/undo/db).
 
-#### A. Competence Framework (CF) Integration
-The types have `cfNodeIds: string[]` on Course, Module, and Lesson, but there is:
-- **No CF data model** — no type for `CompetenceFramework`, `CFNode`, or `CFEdge`
-- **No CF import/parse** — no way to load externally developed frameworks (JSON-LD, CASE, ASN, CSV)
-- **No CF Mapper UI** — the `cf_map` side nav is a placeholder
-- **No mapping validation** — nothing checks whether authored content covers required competencies
-- **No coverage visualization** — no way to see "which competencies are covered/missing"
-
-#### B. Inspector / Course Validator
-- **No validation engine** — no rules that check:
-  - Every competence node has at least one lesson mapped
-  - Lessons have required assessments
-  - Prerequisites form a valid DAG (no cycles)
-  - Pages have accessible content (alt text, heading structure)
-  - Estimated durations are plausible
-- **No inspector UI** — the `inspector` side nav is a placeholder
-- **No validation report** — no exportable coverage/quality report
-
-#### C. Content Editing Beyond Layout
-- **No rich text editor** — text is set via a single input field; no WYSIWYG, no inline formatting, no lists/headings within text blocks
-- **No markdown or HTML source editor** — content authors need to write structured prose, not just positioned labels
-- **No media asset pipeline** — no way to import, reference, or manage images/videos/audio from disk with proper relative paths and bundling
-
-#### D. Save & Auto-Save
-- **No auto-save** — pages are loaded into memory but there's no periodic write-back; the `savePage()` function exists but is never called automatically
-- **No "unsaved changes" indicator** — no dirty state tracking
-- **No save-before-close guard** — closing the window could lose all work
-
-#### E. Open Existing Project
-- **"Open workspace" shows "coming soon" toast** — can't re-open a saved `.mava` project
-- **No recent projects persistence** — the list on the welcome page is hardcoded
-
-#### F. Publish Pipeline
-- **No static HTML/CSS/JS exporter** — the "web standard output" requires a build step that flattens Page JSON into standalone HTML documents with embedded styles and scripts
-- **No SCORM/xAPI packaging** — academic courses typically need LMS-compatible packaging
-- **No preview server** — no way to preview the published course in-app or via dev server
-- **No "map outlet" renderer** — the online preview/delivery endpoint is entirely unbuilt
-
-### 5.2 Necessary for V1.0 (Post-MVP)
-
-#### G. Collaboration & Authoring Roles
-- `Author` type exists with `role: 'owner' | 'editor' | 'supervisor'` but:
-  - No authentication/user system
-  - No concurrent editing or conflict resolution
-  - No review/approval workflow for supervisors
-  - No comment/annotation system on pages or elements
-
-#### H. Assessment Authoring
-- `Lesson.type` can be `"assessment"` but:
-  - No question types (MCQ, fill-blank, matching, drag-drop, short answer)
-  - No scoring/rubric model
-  - No correct answer data structure
-  - No assessment preview/test-run mode
-  - No result tracking schema
-
-#### I. Scene Simulations
-- The interaction/trigger/animation engine is a foundation, but:
-  - No state machine or branching logic for scenario simulations
-  - No variable system (the DSL panel has "Variables" placeholder but no data model)
-  - No conditional logic (if/then/else for branching paths)
-  - No simulation playback/test mode
-
-#### J. Scripting & DSL
-- `DSLTriggerDocument` and `ScriptDef` types exist in `project.ts` but:
-  - No DSL parser or interpreter
-  - No script editor (terminal console is a stub)
-  - No TypeScript compilation pipeline for `ScriptDef.codeTs`
-  - No sandbox for script execution
-
-#### K. Accessibility
-- No ARIA attributes on authored content
-- No accessibility checker/audit tool
-- No keyboard navigation within the canvas
-- No screen reader considerations for the authoring UI itself
-
-#### L. Internationalization (i18n)
-- `Course.metadata.languages` field exists but:
-  - No translation workflow
-  - No locale-aware content switching
-  - No RTL layout support
-  - No string externalization in the authoring UI
-
-### 5.3 Necessary for V2.0+
-
-#### M. Version Control & History
-- `HistoryMeta` type defined, `CURRENT_PROJECT_VERSION` exists, but:
-  - No version history (no undo stack, no revision log, no diffs)
-  - No branching/forking of course versions
-  - No schema migration system for project file format changes
-  - No rollback capability
-
-#### N. Marketplace / Publishing Ecosystem
-- `Course.metadata` has `pricing`, `licensing`, `visibility` fields but:
-  - No account/auth system
-  - No upload/publish API
-  - No course catalog/discovery
-  - No access control for published courses
-  - No analytics on course consumption
-
-#### O. AI-Assisted Authoring
-- No content generation assistance
-- No auto-CF-mapping suggestions
-- No quality/completeness scoring
-
-#### P. Plugin/Extension System
-- `ComponentElement` supports a `componentId` reference, but:
-  - No component registry or marketplace
-  - No plugin API for extending element types
-  - No custom action type registration UI (only programmatic `registerAction()`)
+**New finding — dead code cleanup needed before it compounds:**
+- `useUndoRedo.ts`, `useComponentEditor.ts`, `usePageSwitcher.ts` are fully built composables that are **never imported/invoked anywhere** in the running app (orphaned — `usePageSwitcher` is only referenced by `useComponentEditor`, which is itself unreferenced).
+- `components/renderers/ContainerRenderer.vue`, `FlatHtmlRenderer.vue`, `SvgRenderer.vue`, `ComponentRenderer.vue` are never imported by the live app — leftovers from before the `render-bridge.ts`/`resolver.ts` rewrite. `ComponentRenderer.vue` imports `../CanvasNode.vue`, which **doesn't exist in the repo at all** — this file would fail to compile if anything ever imported it.
+- The 596-line `proto/mava.proto` schema is fully compiled (`prost-build`) and richer than the JSON currently persisted, but zero production code constructs a `proto::` type — everything still round-trips through `serde_json`. Either commit to the migration or drop it from the build to stop paying its compile cost for nothing.
 
 ---
 
@@ -297,115 +137,58 @@ The types have `cfNodeIds: string[]` on Course, Module, and Lesson, but there is
 
 | Risk | Severity | Detail |
 |------|----------|--------|
-| **Vue 3.6.0-beta.1** | High | Production-critical app on a beta framework. Vapor mode is experimental — API may change. |
-| **No tests** | High | Zero test files. No unit, integration, or e2e tests. No test runner configured. |
-| **No CI/CD** | High | No GitHub Actions, no automated builds, no deployment pipeline. |
-| **No linting/formatting** | Medium | No ESLint or Prettier. Code style will drift across contributors. |
-| **No error boundaries** | Medium | Unhandled exceptions in stores or mounter could crash the app silently. |
-| **`modulesById` / `lessonsById` persist as `{ id } as any`** | Medium | `projectMetadata.ts:226-228` writes hollow objects. If these are ever read expecting full Module/Lesson shape, runtime errors will occur. |
-| **Imperative DOM bypasses Vue reactivity** | Medium | Element mutations don't trigger Vue watchers. Any future feature that needs reactive element data (e.g., computed element counts) will need explicit signaling. |
-| **No data backup or recovery** | Medium | Crash during write could corrupt JSON files. No journaling, no temp-file-then-rename pattern. |
-| **Hardcoded resource links** | Low | Welcome page links point to VS Code docs (placeholder URLs). |
-| **Typo in store key** | Low | `outlineExpaded` in layout store (missing 'n'). |
+| **Vue 3.6.0-beta.1** | High | Still on a beta framework in Vapor mode; unchanged risk from March. |
+| **No tests outside CF module** | High | Rust: 8 real tests, but only for `cf/`. Frontend: one non-asserting `console.log` "test" file, no runner configured. |
+| **No CI/CD** | High | Unchanged — no `.github/workflows`, no automated builds. |
+| **Publish button lies to the user** | High (new) | Shows a fake "bundle downloaded" success notification with no work performed — actively misleading, not just missing. |
+| **Undo stack recorded but unreachable** | Medium (new, narrower than March's framing) | Data layer works; only the UI trigger is missing. Low effort, high visible impact to fix. |
+| **`reconstruct_version` is whole-blob, not diff-based** | Medium (new) | Will not correctly reconstruct history once multiple scopes are edited between snapshots — works today mostly by luck of usage patterns. |
+| **Dead/orphaned files** (`useUndoRedo` partially, `useComponentEditor`, `usePageSwitcher`, 4 renderer files, one importing a nonexistent file) | Medium (new) | Increases audit/onboarding confusion; `ComponentRenderer.vue` would break the build if ever wired up as-is. |
+| **`animate` stage is selectable but unrenderable** | Low (new) | Dangling menu item, silent fallthrough to EmptyProject. |
+| **Unused `proto` schema and `thiserror` dependency** | Low (new) | Both declared/compiled, neither used — dead weight in build times and mental model. |
+| **No error boundaries / no data backup on crash** | Medium | Unchanged from March. |
+| **Typo `outlineExpaded`, hollow `{id} as any` sub-docs** | Low | Unchanged from March — not yet cleaned up. |
 
 ---
 
-## 7. Versioning Roadmap Summary
+## 7. Versioning Roadmap Summary (Refreshed)
 
-### MVP (Current → Usable Alpha)
-1. **Open existing project** (extract .mava, hydrate stores)
-2. **Auto-save** with dirty tracking and save-before-close
-3. **Selection handles** (resize + rotate grips on canvas)
-4. **Drag-to-move** elements on canvas
-5. **Rich text editing** (inline contenteditable or embedded editor)
-6. **Asset manager** (import images/video/audio, relative path resolution)
-7. **CF import** (load external framework — at minimum JSON)
-8. **CF Mapper UI** (map lessons/modules to CF nodes)
-9. **Inspector/validator** (basic coverage check: which CF nodes are mapped, which are missing)
-10. **Static HTML export** (flatten pages to standalone HTML/CSS/JS bundles)
-11. **Preview mode** (render published output in a webview)
-12. **Undo/redo** (command stack for element operations)
-13. **Keyboard shortcuts** (delete, copy, paste, undo, redo, select-all)
+### MVP — Current → Usable Alpha
+Reordered by what's now actually left, not what was originally listed:
+
+1. **Wire undo/redo to the UI** — small task, the hard part (data layer) is done. *(was previously scoped as a full feature; now it's a keyboard-handler fix)*
+2. **Real publish flow, or remove the fake one** — at minimum stop showing a false-success notification; ideally build the static HTML/CSS/JS exporter.
+3. **Selection handles** (resize + rotate grips on canvas) — unchanged gap.
+4. **Drag-to-move / reparenting** — unchanged gap.
+5. **Multi-select operations** — wire the already-built `UnifiedToolbar` UI to real align/distribute/group logic.
+6. **Asset manager UI** — the data model (`mediaLibrary`) already exists; this is now "build the panel + file picker," not "design the whole feature."
+7. **Bridge DSL codegen to runtime** — parser/validator/editor are done; connect `codegen.ts` output into `useElementTriggers.ts` so authored triggers actually run.
+8. **Rich text editing** — unchanged gap.
+9. **Unsaved-changes indicator** — small, the `dirtyScopes` state already exists to drive it.
+10. **Undo/redo keyboard shortcuts + delete shortcut** — same effort as #1, bundle together.
+11. **Component library** — wire `createMode.vue`'s empty `componentLibrary` provide to something real, or scope it out of MVP if not essential.
+12. **Clean up dead code** — remove or finish the four orphaned renderer files and three orphaned composables before they cause a confusing bug (especially `ComponentRenderer.vue`'s missing import).
+13. **Fix the `animate` stage dangling reference** — either wire `AnimateMode` into `App.vue`'s v-if chain or remove the menu entry until it's ready.
 
 ### V1.0 (Feature-Complete Product)
-14. Assessment authoring (question types, scoring, rubrics)
-15. DSL / scripting engine (variables, conditions, branching)
-16. Scene simulation mode (state machine, scenario playback)
-17. Template mode (reusable page templates)
-18. Animate mode (timeline-based animation editor)
-19. Component library (create, manage, instantiate reusable components)
-20. Collaboration roles (auth, permissions, review workflow)
-21. SCORM/xAPI export
-22. Accessibility checker
-23. Test suite (unit + e2e) and CI/CD pipeline
+Largely unchanged from March, with CF mapper/inspector now done and removed from this list: assessment authoring, scene simulation/state-machine engine, template mode, animate mode (full build, not just the App.vue wire-up), collaboration roles, SCORM/xAPI export, accessibility checker, real test suite + CI, CF hosted-registry integration (connect to `mava-registry`'s existing Axum backend instead of `STUB_REGISTRY`).
 
 ### V2.0 (Ecosystem & Scale)
-24. Version history with rollback
-25. Online publish endpoint ("map outlet")
-26. Course marketplace (catalog, pricing, access control)
-27. Multi-language / i18n authoring workflow
-28. AI-assisted content generation and CF mapping
-29. Plugin/extension architecture
-30. Analytics dashboard for published courses
+Unchanged: field-level history reconstruction (finish the proto migration to make this real), version history/rollback UI, online publish endpoint, course marketplace, i18n, AI-assisted authoring/CF-mapping, plugin/extension architecture, analytics.
 
 ---
 
-## 8. Component Status Matrix
+## 8. Summary Counts (Refreshed)
 
-| Component | File | Status | Version Target |
-|-----------|------|--------|----------------|
-| App.vue | `src/App.vue` | Partial — undo/redo, terminal, lazy-load commented out | MVP |
-| AppHeader | `src/components/AppHeader.vue` | Partial — publish/project stubbed | MVP |
-| SideNav | `src/components/SideNav.vue` | Partial — project guard commented out | MVP |
-| NavAssociates | `src/components/NavAssociates.vue` | Partial — 5 of 7 panels are placeholders | MVP–V1.0 |
-| RightUtilities | `src/components/RightUtilities.vue` | Partial — Properties, Actions commented out | MVP |
-| NotificationsTray | `src/components/NotificationsTray.vue` | **Complete** | ✓ |
-| TerminalConsole | `src/components/TerminalConsole.vue` | Stub | V1.0 |
-| GlobalPalette | `src/components/GlobalPalette.vue` | Stub — debug overlay | V1.0 |
-| CreateMode | `src/mods/createMode.vue` | Partial — move/reparent stubbed | MVP |
-| TemplateMode | `src/mods/templateMode.vue` | Stub | V1.0 |
-| AnimateMode | `src/mods/animateMode.vue` | Stub | V1.0 |
-| EmptyProject | `src/mods/emptyProject.vue` | Partial — "Open" not working, hardcoded recents | MVP |
-| StructurePanel | `src/components/SideNavigation/StructurePanel.vue` | **Complete** | ✓ |
-| ElementsPanel | `src/components/SideNavigation/ElementsPanel.vue` | Partial — text labels, no icons | MVP |
-| ExplorerTree/Item | `src/components/SideNavigation/Structure/` | **Complete** | ✓ |
-| OutlineTree/Item | `src/components/SideNavigation/Structure/` | **Complete** | ✓ |
-| StylePanel | `src/components/RightPanel/StylePanel.vue` | **Complete** (container/router) | ✓ |
-| LayoutPanel | `src/components/RightPanel/panels/LayoutPanel.vue` | **Complete** | ✓ |
-| TransformPanel | `src/components/RightPanel/panels/TransformPanel.vue` | **Complete** | ✓ |
-| EffectsPanel | `src/components/RightPanel/panels/EffectsPanel.vue` | **Complete** | ✓ |
-| TextPanel | `src/components/RightPanel/panels/TextPanel.vue` | **Complete** | ✓ |
-| ImagePanel | `src/components/RightPanel/panels/ImagePanel.vue` | **Complete** | ✓ |
-| FillStroke | `src/components/RightPanel/panels/FillStroke.vue` | **Complete** | ✓ |
-| RadiusPanel | `src/components/RightPanel/panels/RadiusPanel.vue` | **Complete** | ✓ |
-| PaddingPanel | `src/components/RightPanel/panels/PaddingPanel.vue` | **Complete** | ✓ |
-| UnifiedToolbar | `src/components/RightPanel/UnifiedToolbar.vue` | Partial — UI built, logic stubbed | MVP |
-| ColorPicker | `src/components/RightPanel/ColorPicker.vue` | Stub | MVP |
-| DSLActionsPanel | `src/components/RightPanel/DSLActionsPanel.vue` | Stub | V1.0 |
-| PropertiesPanel | `src/components/RightPanel/PropertiesPanel.vue` | Stub | MVP |
-| element.mounter.ts | `src/utils/element.mounter.ts` | **Complete** | ✓ |
-| element.builder.ts | `src/utils/element.builder.ts` | **Complete** | ✓ |
-| element.actions.ts | `src/utils/element.actions.ts` | **Complete** | ✓ |
-| element.animations.ts | `src/utils/element.animations.ts` | **Complete** | ✓ |
-| pages store | `src/stores/pages.ts` | **Complete** | ✓ |
-| element store | `src/stores/element.ts` | **Complete** | ✓ |
-| projectMetadata store | `src/stores/projectMetadata.ts` | **Complete** (minor: hollow sub-docs) | ✓ |
-| layout store | `src/stores/layout.ts` | **Complete** (minor: typo `outlineExpaded`) | ✓ |
-| notification store | `src/stores/notification.ts` | **Complete** | ✓ |
+| Category | March 2026 | July 2026 |
+|----------|-----------|-----------|
+| Pinia stores | 7 | 11 |
+| Composables | 1 | 14 (2 fully orphaned, 1 partially orphaned) |
+| CF module (Rust) | Nonexistent | 6 files, real logic, 8 tests |
+| DSL toolchain (frontend) | Nonexistent | ~4200 lines (lexer/parser/AST/validator/codegen/summarizer), authoring works, execution not bridged |
+| Rust unit tests | 0 | 8 (CF module only) |
+| Frontend test files | 0 | 1 (non-asserting, not run by anything) |
+| CI/CD configs | 0 | 0 |
+| Known dead/orphaned files | 0 flagged | 3 composables + 4 renderer components |
 
----
-
-## 9. Summary Counts
-
-| Category | Count |
-|----------|-------|
-| Vue components (total) | 31 |
-| **Complete** | 17 (55%) |
-| **Partial** | 10 (32%) |
-| **Stub** | 4 (13%) |
-| Pinia stores | 7 (all operational) |
-| Utility modules | 8 (all operational) |
-| Test files | 0 |
-| CI/CD configs | 0 |
-
-**Bottom line:** The visual authoring canvas and its style-editing ecosystem are well-built. The gap to MVP is primarily in (a) the CF integration and inspector that make this an *academic* tool rather than a generic design tool, (b) the export pipeline that gives the authored content a life outside the editor, and (c) the basic UX essentials (save, undo, open, select handles) that make it usable for sustained authoring work.
+**Bottom line:** the academic-tool differentiator (CF integration) that March called the biggest gap is now genuinely built and tested on both ends. The new center of gravity is: (a) a handful of small "just wire it up" tasks where real infrastructure already exists but isn't connected (undo/redo, DSL execution, asset manager UI, unsaved-changes indicator), (b) the canvas-interaction gaps that haven't moved since March (selection handles, drag-move, multi-select), (c) a publish flow that needs to either become real or stop lying to users, and (d) a small but growing pile of dead code worth cleaning up before the next contributor trips over it.

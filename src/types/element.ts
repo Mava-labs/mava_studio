@@ -1,5 +1,6 @@
 import { FlexDisplay, GridDisplay } from "./project";
 import type { ElementCFProof } from "./cf-alignment.types";
+import type { BindingMap } from "./variables";
 
 /* ============================================================
    CORE LAYOUT & RESPONSIVE
@@ -40,11 +41,40 @@ export interface Layout {
     justify?: string
     align?: string
     wrap?: boolean
+    /** grid-template-columns, e.g. "1fr 1fr" or "repeat(3, 1fr)" — this element's own grid, when mode:'grid'. */
     columns?: string
+    /** grid-template-rows — same free-text convention as columns. */
+    rows?: string
     x?: string
     y?: string
     z?: number
     overflow?: 'visible' | 'hidden' | 'auto'
+    /**
+     * type:'text' only — which HTML tag this "Plain text" element resolves
+     * to. Defaults to 'p'. 'span' is the "inline" case (see resolver.ts's
+     * resolveFlatHtmlElement — a plain tag swap isn't enough on its own,
+     * inline also forces display:inline + width/height:auto, since a real
+     * <span> ignores an explicit block-era width anyway and the whole point
+     * of switching to inline is to stop taking a fixed width). 'h1'/'h2'/'h3'
+     * are the same text element, just resolving to a heading tag instead —
+     * one element covers block text, inline text, and headings rather than
+     * needing separate element kinds for each.
+     */
+    textTag?: 'p' | 'span' | 'h1' | 'h2' | 'h3'
+
+    /**
+     * Item-level properties — apply when *this* element is a direct child of
+     * a flex/grid container (or the page root in flex/grid mode, see
+     * Page['stage'].display.layout in project.ts), not to its own layout.
+     * Gated in the UI (LayoutPanel.vue's "Item" section) on whether the
+     * parent context is actually flex/grid — order/span on a flow child
+     * would be a dead control, same reasoning as the resize-handle gating.
+     */
+    order?: number
+    /** grid-column: span N — grid parent only. */
+    columnSpan?: number
+    /** grid-row: span N — grid parent only. */
+    rowSpan?: number
 }
 
 export type BreakpointId = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -135,6 +165,8 @@ export interface BaseElement<TStyle> {
     effects: Effects;
     style: TStyle;
     responsive?: ResponsiveDelta<TStyle>[];
+    /** Variable bindings, keyed by dot-path into this element (e.g. 'style.content', 'layout.visible'). */
+    bindings?: BindingMap;
     interaction: {
         triggers: ElementTrigger[];
         animations: ElementAnimation[];
@@ -151,9 +183,14 @@ export type FlatHtml =
     | 'video'
     | 'audio'
     | 'button'
-    | 'input'
+    | 'textinput'
+    | 'select'
+    | 'checkbox'
+    | 'radio'
     | 'textarea'
     | 'label'
+    | 'iframe'
+    | 'code'
     | 'icon';
 
 export interface TextStyle {
@@ -173,8 +210,28 @@ export interface TextStyle {
     decoration: 'underline' | 'line-through' | 'none';
 }
 
+/**
+ * Button used to be styled with plain TextStyle — no background/border/radius
+ * fields exist on that type, so a button could never actually have a fill,
+ * stroke, or rounded corners; the resolver hardcoded a flat border/transparent
+ * background instead. ButtonStyle extends TextStyle (keeps `content`, the
+ * button's label) and adds the same box-ish fields InputStyle already has, so
+ * FillStroke/RadiusPanel/PaddingPanel's existing `'x' in style` gates just
+ * start working for buttons with no gating changes needed.
+ */
+export interface ButtonStyle extends TextStyle {
+    background?: string;
+    border?: BorderStyle;
+    radius?: number | {
+        tl: number;
+        tr: number;
+        br: number;
+        bl: number;
+    };
+    padding?: number | BoxEdges;
+}
+
 export interface ImageStyle {
-    src: string;
     alt?: string;
     fit?: 'cover' | 'contain' | 'fill' | 'none';
     position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
@@ -187,7 +244,6 @@ export interface ImageStyle {
 }
 
 export interface MediaStyle {
-    src: string;
     autoplay?: boolean;
     loop?: boolean;
     muted?: boolean;
@@ -201,13 +257,25 @@ export type InputType =
     | 'number'
     | 'checkbox'
     | 'radio'
+    | 'search'
+    | 'tel'
+    | 'url'
+    | 'file'
+    | 'range'
     | 'date';
 
 export interface InputStyle {
-    value?: string | number | boolean;
-    placeholder?: string;
-    disabled?: boolean;
-    required?: boolean;
+    background?: string;
+    padding?: number | BoxEdges;
+    border?: BorderStyle;
+    radius?: number | {
+        tl: number;
+        tr: number;
+        br: number;
+        bl: number;
+    };
+    placeholderColor?: string;
+    textStyle?: Omit<TextStyle, 'content'>;
 }
 
 export interface IconStyle {
@@ -216,7 +284,7 @@ export interface IconStyle {
     color?: string;
 }
 
-export interface FlatHtmlElement extends BaseElement<TextStyle | ImageStyle | MediaStyle | InputStyle | IconStyle> {
+export interface FlatHtmlElement extends BaseElement<TextStyle | ButtonStyle | ImageStyle | MediaStyle | InputStyle | IconStyle> {
     kind: 'flatHtml';
     type: FlatHtml;
 }
@@ -234,7 +302,10 @@ export type ContainerType =
     | 'nav'
     | 'list'
     | 'form'
-    | 'group';
+    | 'group'
+    /** A hole in a component definition; a component instance's children render
+     *  here (render-bridge). In the definition editor it shows a placeholder. */
+    | 'slot';
 
 export interface ContainerStyle {
     background?: string;
@@ -364,7 +435,8 @@ export interface BoxEdges {
 
 export interface BorderStyle {
     color: string;
-    width: number;
+    /** Uniform width, or per-side — same number|BoxEdges convention style.padding/radius already use. */
+    width: number | BoxEdges;
     style: 'solid' | 'dashed' | 'dotted';
 }
 

@@ -71,6 +71,12 @@ export const useVariableStore = defineStore('variables', () => {
             delete globalVars[def.name]
         }
 
+        if (existing?.scope === 'page' && def.scope === 'global') {
+            for (const pageId of Object.keys(pageVars)) {
+                delete pageVars[pageId][def.name]
+            }
+        }
+
         for (const pageId of Object.keys(pageVars)) {
             if (!(def.name in pageVars[pageId])) {
                 pageVars[pageId][def.name] = def.defaultValue
@@ -105,11 +111,33 @@ export const useVariableStore = defineStore('variables', () => {
         }
 
         if (nextName !== name) {
+            // Carry the live value forward under the new key instead of
+            // reseeding from defaultValue — a rename shouldn't reset state.
+            const priorGlobalValue = globalVars[name]
+            const hadGlobalValue = name in globalVars
+            const priorPageValues: Record<string, unknown> = {}
+            for (const pageId of Object.keys(pageVars)) {
+                if (name in pageVars[pageId]) {
+                    priorPageValues[pageId] = pageVars[pageId][name]
+                }
+            }
+
             delete definitions[name]
             delete globalVars[name]
             for (const pageId of Object.keys(pageVars)) {
                 delete pageVars[pageId][name]
             }
+
+            definitions[nextName] = next
+            if (next.scope === 'global') {
+                globalVars[nextName] = hadGlobalValue ? priorGlobalValue : next.defaultValue
+            }
+            for (const pageId of Object.keys(pageVars)) {
+                pageVars[pageId][nextName] = pageId in priorPageValues
+                    ? priorPageValues[pageId]
+                    : next.defaultValue
+            }
+            return
         }
 
         definitions[nextName] = next
@@ -130,6 +158,22 @@ export const useVariableStore = defineStore('variables', () => {
         for (const pageId of Object.keys(pageVars)) {
             delete pageVars[pageId][name]
         }
+    }
+
+    /**
+     * Full replace, not a merge — for undo/redo (projectMetadata.ts's
+     * restoreScope() for the 'variables' DirtyScope). initDefinitions()
+     * only ever adds/updates, it never removes a definition that isn't in
+     * the new set, so restoring a snapshot from before a variable was
+     * created would leave that variable behind. This removes anything not
+     * present in the target snapshot first, then delegates to
+     * initDefinitions() for the add/update half.
+     */
+    function replaceDefinitions(defs: Record<string, VariableDef>) {
+        for (const name of Object.keys(definitions)) {
+            if (!(name in defs)) deleteVariable(name)
+        }
+        initDefinitions(defs)
     }
 
     function initPageVars(pageId: string) {
@@ -224,6 +268,7 @@ export const useVariableStore = defineStore('variables', () => {
         globalVars: readonly(globalVars),
         pageVars: readonly(pageVars),
         initDefinitions,
+        replaceDefinitions,
         upsertVariable,
         createVariable,
         updateVariable,

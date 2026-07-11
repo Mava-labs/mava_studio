@@ -111,12 +111,14 @@ const categories: Category[] = [
         name: 'Premitives',
         elements: [
             { type: 'text',     visualSrc: 'Text' },
+            { type: 'label',    visualSrc: 'Label' },
             { type: 'image',    visualSrc: 'Image' },
             { type: 'video',    visualSrc: 'Video' },
             { type: 'audio',    visualSrc: 'Audio' },
             { type: 'iframe',   visualSrc: 'iFrame' },
             { type: 'button',   visualSrc: 'Button' },
             { type: 'input',    visualSrc: 'Input' },
+            { type: 'textarea', visualSrc: 'Textarea' },
             { type: 'select',   visualSrc: 'Select' },
             { type: 'checkbox', visualSrc: 'Checkbox' },
             { type: 'radio',    visualSrc: 'Radio' },
@@ -135,6 +137,7 @@ const categories: Category[] = [
             { type: 'form',     visualSrc: 'Form' },
             { type: 'list',     visualSrc: 'List' },
             { type: 'table',    visualSrc: 'Table' },
+            { type: 'slot',     visualSrc: 'Slot' },
         ],
     },
 ];

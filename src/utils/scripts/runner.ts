@@ -23,16 +23,17 @@ export async function runScript(script: ScriptDef): Promise<void> {
     const ctx = buildScriptContext()
 
     try {
-        // Only stage, project, element, fetch are in scope
+        // Only mava, stage, project, element, fetch are in scope
         // window, document, DOM APIs are not passed in
         const fn = new Function(
+            'mava',
             'stage',
             'project',
             'element',
             'fetch',
             script.compiledJs
         )
-        await fn(ctx.stage, ctx.project, ctx.element, ctx.fetch)
+        await fn(ctx.mava, ctx.stage, ctx.project, ctx.element, ctx.fetch)
     } catch (err) {
         terminal.error(`[script: ${script.name}] ${(err as Error).message}`)
     }
@@ -42,12 +43,18 @@ export async function runScript(script: ScriptDef): Promise<void> {
 
 /**
  * Register all project scripts into the action registry.
- * Each script gets action type 'script:{scriptId}'.
+ * Each script gets action type 'script:{scriptName}' — keyed by name, not id,
+ * because that's the only handle a trigger author ever writes (`execute
+ * <name>` in the DSL) and the only thing `validator.ts`'s ExecuteAction
+ * check resolves against (`s.name === action.scriptName`). Keying by id here
+ * silently broke every `execute` trigger action: it validated clean (name
+ * exists) and compiled clean, then found no registered handler at runtime
+ * unless a script's id happened to equal its name.
  * Called once on project load, and again when scripts are added or updated.
  */
 export function registerScripts(scripts: Record<string, ScriptDef>): void {
     for (const script of Object.values(scripts)) {
-        registerAction(`script:${script.id}`, async () => {
+        registerAction(`script:${script.name}`, async () => {
             await runScript(script)
         })
     }
@@ -55,10 +62,16 @@ export function registerScripts(scripts: Record<string, ScriptDef>): void {
 
 /**
  * Re-register a single script after edit/recompile.
- * Overwrites the previous handler for that script id.
+ * Overwrites the previous handler for that script's current name. If the
+ * script was just renamed, the handler under its old name is intentionally
+ * left registered (stale) rather than tracked/removed here — this module
+ * has no record of the previous name to clean up, and the stale entry is
+ * harmless (nothing left in the project still points at the old name after
+ * a rename, since triggers reference scripts by name and would have been
+ * updated or flagged E003 by the validator).
  */
 export function reregisterScript(script: ScriptDef): void {
-    registerAction(`script:${script.id}`, async () => {
+    registerAction(`script:${script.name}`, async () => {
         await runScript(script)
     })
 }

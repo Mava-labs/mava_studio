@@ -21,6 +21,7 @@ import { useNotificationStore } from '../stores/notification';
 import { usePagesStore } from '../stores/pages';
 import { useStageStore } from '../stores/stage';
 import { useAutosave } from './useAutosave';
+import { registerScripts } from '../utils/scripts/runner';
 import type { ProjectData } from '../types/project';
 
 // ── Notification helper ────────────────────────────────────────────────────
@@ -134,6 +135,7 @@ export function useProjectLifecycle() {
                 notify('Project created but failed to open first page.', 'warn', 5000);
             }
 
+            registerScripts(project.actionScripts);
             stage.setStage('create');
             stage.resetCanvas();
             autosave.start();
@@ -176,6 +178,7 @@ export function useProjectLifecycle() {
                 notify('Project opened but no pages found.', 'warn', 4000);
             }
 
+            registerScripts(project.actionScripts);
             stage.setStage('create');
             stage.resetCanvas();
             autosave.start();
@@ -193,14 +196,16 @@ export function useProjectLifecycle() {
        EXPLICIT SAVE (Ctrl+S)
     ---------------------------------------------------------- */
 
-    async function saveNow(): Promise<void> {
-        if (!project.isProjectOpen) return;
+    async function saveNow(): Promise<boolean> {
+        if (!project.isProjectOpen) return false;
         try {
             await autosave.flushNow();
             await project.saveProject();
             notify('Project saved.', 'info', 2000);
+            return true;
         } catch (err: unknown) {
             notify(`Failed to save: ${err instanceof Error ? err.message : String(err)}`, 'error', 5000);
+            return false;
         }
     }
 

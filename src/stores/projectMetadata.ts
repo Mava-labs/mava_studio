@@ -21,6 +21,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, readonly } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import type {
     ProjectData,
     Course,
@@ -29,45 +30,20 @@ import type {
     Author,
     DSLTriggerDocument,
     ScriptDef,
+    ComponentDefinition,
 } from '../types/project';
 import type { Element } from '../types/element';
-import { VariableDef } from '../types/variables';
+import { useVariableStore } from './variables';
+import type { VariableDef } from '../types/variables';
 
 /* ============================================================
    SUPPLEMENTARY TYPES
    ============================================================ */
 
-/** A component in the shared library — wraps an Element tree with identity. */
-export interface ComponentDefinition {
-    id: string;
-    name: string;
-    /** Semver string e.g. "1.0.0". Bump on any structural change. */
-    version: string;
-    /** 'local' = authored here. 'marketplace' = imported, pinned. */
-    source: 'local' | 'marketplace';
-    /** Only set for marketplace components. */
-    marketplaceRef?: {
-        publisherId: string;
-        packageId: string;
-        pinnedVersion: string;
-        originUrl: string;
-    };
-    authorId: string;
-    rootIds: string[];
-    elementsById: Record<string, Element>;
-    /** Declared prop schema — what consumers can override at the usage site. */
-    props: ComponentPropSchema[];
-    createdAt: number;
-    updatedAt: number;
-}
-
-export interface ComponentPropSchema {
-    key: string;
-    type: 'string' | 'number' | 'boolean' | 'color' | 'image' | 'any';
-    defaultValue?: unknown;
-    required?: boolean;
-    description?: string;
-}
+// ComponentDefinition / ComponentPropSchema now live in types/project.ts (so
+// they can be part of ProjectData and round-trip fully). Re-exported here so
+// existing `from '../../stores/projectMetadata'` imports keep working.
+export type { ComponentDefinition, ComponentPropSchema } from '../types/project';
 
 export interface MediaAsset {
     id: string;
@@ -116,7 +92,8 @@ export type DirtyScope =
     | { kind: 'component'; id: string }
     | { kind: 'mediaLibrary' }
     | { kind: 'scripts' }
-    | { kind: 'dslTriggers' };
+    | { kind: 'dslTriggers' }
+    | { kind: 'variables' };
 
 /* ============================================================
    UNDO / REDO TYPES
@@ -218,6 +195,8 @@ interface ReconstructVersionPayload {
 
 export const useProjectMetadataStore = defineStore('projectMetadata', () => {
 
+    const variableStore = useVariableStore();
+
     /* ----------------------------------------------------------
        STATE — PROJECT IDENTITY
     ---------------------------------------------------------- */
@@ -261,7 +240,11 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
     const mediaLibrary     = ref<Record<string, MediaAsset>>({});
     const dslTriggers      = ref<Record<string, DSLTriggerDocument>>({});
     const actionScripts    = ref<Record<string, ScriptDef>>({});
-    const variables        = ref<Record<string, VariableDef>>({})
+    // Variable *definitions* deliberately don't get their own ref here —
+    // stores/variables.ts's useVariableStore() already owns that reactive
+    // state (definitions + live global/page values); duplicating it into a
+    // second ref on this store would just be two copies that can drift.
+    // _snapshot()/_hydrate() below read from and write to that store directly.
 
     /* ----------------------------------------------------------
        STATE — CF STUBS
@@ -433,6 +416,10 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
             case 'dslTriggers':
                 if (snapshot && typeof snapshot === 'object')
                     dslTriggers.value = snapshot as Record<string, DSLTriggerDocument>;
+                break;
+            case 'variables':
+                if (snapshot && typeof snapshot === 'object')
+                    variableStore.replaceDefinitions(snapshot as Record<string, VariableDef>);
                 break;
             default:
                 console.warn('[projectMetadata] restoreScope: unhandled scope kind', scope);
@@ -828,6 +815,43 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
         markDirty({ kind: 'component', id: def.id });
     }
 
+    /** Create a new, empty local component and add it to the library. */
+    function createComponent(name: string): ComponentDefinition {
+        return createComponentFromTree(name, [], {});
+    }
+
+    /**
+     * Create a local component from an existing element tree (used by
+     * "make component from selection"). The root elements' parentId is cleared
+     * — inside a component definition a root has no page parent.
+     */
+    function createComponentFromTree(
+        name: string,
+        rootIds: string[],
+        elementsById: Record<string, Element>,
+    ): ComponentDefinition {
+        const now = Date.now();
+        const rootSet = new Set(rootIds);
+        const cleaned: Record<string, Element> = Object.fromEntries(
+            Object.entries(elementsById).map(([id, el]) =>
+                [id, rootSet.has(id) ? { ...el, parentId: undefined } : el]),
+        );
+        const def: ComponentDefinition = {
+            id: Math.random().toString(36).slice(2),
+            name,
+            version: '1.0.0',
+            source: 'local',
+            authorId: '',
+            rootIds: [...rootIds],
+            elementsById: cleaned,
+            props: [],
+            createdAt: now,
+            updatedAt: now,
+        };
+        addComponent(def);
+        return def;
+    }
+
     function updateComponent(id: string, patch: Partial<ComponentDefinition>) {
         const existing = componentLibrary.value[id];
         if (!existing) return;
@@ -861,9 +885,63 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
         markDirty({ kind: 'mediaLibrary' });
     }
 
+    function updateMedia(id: string, patch: Partial<Omit<MediaAsset, 'id'>>) {
+        const existing = mediaLibrary.value[id];
+        if (!existing) return;
+        mediaLibrary.value[id] = { ...existing, ...patch };
+        markDirty({ kind: 'mediaLibrary' });
+    }
+
     function deleteMedia(id: string) {
         delete mediaLibrary.value[id];
         markDirty({ kind: 'mediaLibrary' });
+    }
+
+    const MEDIA_EXTENSIONS: Record<'image' | 'video' | 'audio', string[]> = {
+        image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'],
+        video: ['mp4', 'webm', 'mov', 'avi', 'mkv'],
+        audio: ['mp3', 'wav', 'ogg', 'm4a', 'flac'],
+    };
+
+    /**
+     * Opens a native "choose files" dialog filtered to image/video/audio
+     * extensions and imports each picked file into the project's own .mava
+     * file — this is the desktop-import half of "local media goes through
+     * Assets." Delegates the actual read/hash/store to the Rust
+     * `import_media_asset` command (db/migrations.rs's `media_blobs` table,
+     * content-addressed by SHA-256) rather than just recording the file's
+     * original path — a project should stay a single, self-contained file
+     * that still works if the source file is moved, renamed, or the project
+     * is opened on a different machine, not a pointer to wherever the file
+     * happened to be at import time.
+     */
+    async function importMediaFromDevice(): Promise<MediaAsset[]> {
+        if (!projectId.value) return [];
+
+        const picked = await open({
+            title: 'Import media',
+            multiple: true,
+            filters: [
+                { name: 'Images', extensions: MEDIA_EXTENSIONS.image },
+                { name: 'Video', extensions: MEDIA_EXTENSIONS.video },
+                { name: 'Audio', extensions: MEDIA_EXTENSIONS.audio },
+            ],
+        });
+        if (!picked) return [];
+
+        const paths = Array.isArray(picked) ? picked : [picked];
+        const imported: MediaAsset[] = [];
+
+        for (const path of paths) {
+            const asset = await invoke<MediaAsset>('import_media_asset', {
+                projectId: projectId.value,
+                path,
+            });
+            addMedia(asset);
+            imported.push(asset);
+        }
+
+        return imported;
     }
 
     /* ----------------------------------------------------------
@@ -987,20 +1065,37 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
             });
         });
 
-        // Wrap raw Element entries into ComponentDefinition shape.
-        // Update this mapping once Rust returns ComponentDefinition directly.
+        // Component library now round-trips as full ComponentDefinitions.
+        // Legacy projects saved the bare root Element instead (only the root
+        // survived) — detect those (no rootIds/elementsById) and migrate them
+        // through the same bridge so old files still open.
         componentLibrary.value = Object.fromEntries(
-            Object.entries(data.componentLibrary).map(([id, el]) => [
-                id, _elementToComponentDef(id, el),
+            Object.entries(data.componentLibrary ?? {}).map(([id, entry]) => [
+                id,
+                _isComponentDefinition(entry)
+                    ? entry
+                    : _elementToComponentDef(id, entry as unknown as Element),
             ])
         );
 
         mediaLibrary.value = Object.fromEntries(
             Object.entries(data.mediaLibrary).map(([id, m]) => [
                 id,
-                { id: m.id, name: m.name, type: m.type, url: m.url, createdAt: Date.now() } satisfies MediaAsset,
+                {
+                    id: m.id, name: m.name, type: m.type, url: m.url,
+                    hash: m.hash, sizeBytes: m.sizeBytes,
+                    // Only fresh-mint createdAt for assets saved before this
+                    // field round-tripped at all — not on every load.
+                    createdAt: m.createdAt ?? Date.now(),
+                } satisfies MediaAsset,
             ])
         );
+
+        // Load-bearing fix: this used to not exist at all, so every project
+        // load started with a completely empty variable store regardless of
+        // what the author had defined — see initDefinitions()'s own doc
+        // comment and CLEANUP_TODO.md's long-standing "top blocker" note.
+        variableStore.initDefinitions(data.variableDefinitions ?? {});
 
         dslTriggers.value   = data.dslTriggers;
         actionScripts.value = data.actionScripts;
@@ -1027,22 +1122,29 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
             modulesById:        modulesById.value,
             lessonsById:        lessonsById.value,
             pagesById:          {}, // excluded — owned by pagesStore
-            componentLibrary:   Object.fromEntries(
-                Object.entries(componentLibrary.value).map(([id, def]) => [
-                    id, def.elementsById[def.rootIds[0]] ?? ({} as Element),
-                ])
-            ),
+            // Full definitions now — the whole tree + prop schema + version,
+            // not just the root element (the old lossy shape).
+            componentLibrary:   { ...componentLibrary.value },
             mediaLibrary: Object.fromEntries(
                 Object.entries(mediaLibrary.value).map(([id, a]) => [
-                    id, { id: a.id, name: a.name, type: a.type, url: a.url },
+                    id, { id: a.id, name: a.name, type: a.type, url: a.url, hash: a.hash, sizeBytes: a.sizeBytes, createdAt: a.createdAt },
                 ])
             ),
+            variableDefinitions: { ...variableStore.definitions },
             dslTriggers:   dslTriggers.value,
             actionScripts: actionScripts.value,
         };
     }
 
-    /** Temporary bridge: wrap a bare Element into a minimal ComponentDefinition. */
+    /** True if a persisted library entry is already a full ComponentDefinition (vs. a legacy bare Element). */
+    function _isComponentDefinition(entry: unknown): entry is ComponentDefinition {
+        return !!entry
+            && typeof entry === 'object'
+            && Array.isArray((entry as ComponentDefinition).rootIds)
+            && typeof (entry as ComponentDefinition).elementsById === 'object';
+    }
+
+    /** Migration only: wrap a legacy bare root Element into a minimal ComponentDefinition. */
     function _elementToComponentDef(id: string, el: Element): ComponentDefinition {
         return {
             id,
@@ -1169,13 +1271,17 @@ export const useProjectMetadataStore = defineStore('projectMetadata', () => {
 
         // ── Component library ──────────────────────────────────
         addComponent,
+        createComponent,
+        createComponentFromTree,
         updateComponent,
         deleteComponent,
         upgradeMarketplaceComponent,
 
         // ── Media ──────────────────────────────────────────────
         addMedia,
+        updateMedia,
         deleteMedia,
+        importMediaFromDevice,
 
         // ── DSL / Scripts ──────────────────────────────────────
         upsertDslTrigger,

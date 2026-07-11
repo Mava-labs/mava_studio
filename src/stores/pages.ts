@@ -19,7 +19,9 @@
 import { defineStore } from 'pinia';
 import { ref, readonly } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Page } from '../types/project';
+import type { Page, ComponentDefinition } from '../types/project';
+import { deepClone } from '../types/project';
+import type { Element } from '../types/element';
 import { useProjectMetadataStore } from './projectMetadata';
 import { useNotificationStore } from './notification';
 
@@ -33,6 +35,17 @@ const DEFAULT_STAGE: Page['stage'] = {
     width: 1280,
     height: 720,
     background: '#1e1e1e',
+    display: { padding: 0, margin: 0, overflow: 'auto', layout: { mode: 'block' } },
+};
+
+// The synthetic stage a component gets when edited on the canvas — a component
+// has no stage of its own; this is just the editing surface size. Ignored on
+// commit (only rootIds/elementsById flow back to the definition).
+const DEFAULT_COMPONENT_STAGE: Page['stage'] = {
+    width: 800,
+    height: 600,
+    background: '#1e1e1e',
+    display: { padding: 0, margin: 0, overflow: 'auto', layout: { mode: 'block' } },
 };
 
 /* ============================================================
@@ -110,6 +123,16 @@ export const usePagesStore = defineStore('pages', () => {
     const isLoadingPage = ref<boolean>(false);
     const recentActiveIds = ref<string[]>([]);
 
+    /**
+     * Ids in `pagesCache`/`activePageId` that are actually *component* editing
+     * surfaces (a component tab), not real pages. A component is edited on the
+     * canvas as a virtual Page (id = componentId); this set is how the store
+     * knows to route its commits/saves/undo to the component library instead
+     * of the page-save path. Empty in the normal page-only workflow — every
+     * page-path branch below is unchanged when nothing is a component surface.
+     */
+    const componentSurfaces = ref<Set<string>>(new Set());
+
     // Internal LRU — single source of truth, pagesCache is its reactive mirror
     const lru = new LruCache<string, Page>(LRU_MAX);
 
@@ -137,6 +160,12 @@ export const usePagesStore = defineStore('pages', () => {
                 width: page.stage?.width > 0 ? page.stage.width : DEFAULT_STAGE.width,
                 height: page.stage?.height > 0 ? page.stage.height : DEFAULT_STAGE.height,
                 background: page.stage?.background ?? DEFAULT_STAGE.background,
+                display: {
+                    padding: page.stage?.display?.padding ?? DEFAULT_STAGE.display!.padding,
+                    margin: page.stage?.display?.margin ?? DEFAULT_STAGE.display!.margin,
+                    overflow: page.stage?.display?.overflow ?? DEFAULT_STAGE.display!.overflow,
+                    layout: page.stage?.display?.layout ?? DEFAULT_STAGE.display!.layout,
+                },
             },
             elements: page.elements ?? {},
             rootIds: page.rootIds ?? [],
@@ -162,6 +191,58 @@ export const usePagesStore = defineStore('pages', () => {
     }
 
     /* ----------------------------------------------------------
+       COMPONENT EDITING SURFACES
+    ---------------------------------------------------------- */
+
+    function isComponentSurface(id: string | null): boolean {
+        return !!id && componentSurfaces.value.has(id);
+    }
+
+    /** The scope (page vs component) the active surface's mutations belong to — used for undo + dirty routing. */
+    function activeSurfaceScope(): { kind: 'page' | 'component'; id: string } | null {
+        const id = activePageId.value;
+        if (!id) return null;
+        return { kind: isComponentSurface(id) ? 'component' : 'page', id };
+    }
+
+    /** Build the virtual Page that backs editing a component on the canvas. */
+    function _componentToPage(def: ComponentDefinition): Page {
+        return {
+            id: def.id,
+            visible: true,
+            stage: DEFAULT_COMPONENT_STAGE,
+            elements: deepClone(def.elementsById) as Record<string, Element>,
+            rootIds: [...def.rootIds],
+            metadata: {
+                title: def.name,
+                version: 1,
+                createdAt: def.createdAt,
+                updatedAt: def.updatedAt,
+                lastEditedBy: { userId: def.authorId, name: '' },
+            },
+        };
+    }
+
+    /**
+     * Open (or re-open) a component as the active editing surface — the canvas,
+     * element store, and tab strip then treat it exactly like a page. Derived
+     * fresh from the (always-current, since commits sync it) component library.
+     */
+    function openComponentSurface(componentId: string): 'Ok' | 'Error' {
+        const def = project.componentLibrary[componentId] as ComponentDefinition | undefined;
+        if (!def) {
+            notification.addNotification('Component not found.', { type: 'error' });
+            return 'Error';
+        }
+        lru.set(componentId, _componentToPage(def));
+        componentSurfaces.value.add(componentId);
+        activePageId.value = componentId;
+        _rememberActive(componentId);
+        _syncCache();
+        return 'Ok';
+    }
+
+    /* ----------------------------------------------------------
        LOAD
     ---------------------------------------------------------- */
 
@@ -172,6 +253,12 @@ export const usePagesStore = defineStore('pages', () => {
      * since the page was already saved before being evicted (see _evictSave).
      */
     async function loadPage(pageId: string): Promise<'Ok' | 'Error'> {
+        // Component surface — re-derive from the library and activate, never
+        // hit Rust's load_page (there's no page row for a component id).
+        if (isComponentSurface(pageId)) {
+            return openComponentSurface(pageId);
+        }
+
         // Already in cache — promote and switch
         if (lru.has(pageId)) {
             lru.get(pageId); // promotes to most-recent
@@ -227,7 +314,38 @@ export const usePagesStore = defineStore('pages', () => {
     function commitPageToCache(page: Page) {
         lru.set(page.id, page);
         _syncCache();
-        project.markDirty({ kind: 'page', id: page.id });
+        if (isComponentSurface(page.id)) {
+            // Sync the edited tree back to the component definition and mark
+            // the component scope dirty (updateComponent does the markDirty).
+            project.updateComponent(page.id, {
+                rootIds: [...page.rootIds],
+                elementsById: { ...page.elements },
+            });
+        } else {
+            project.markDirty({ kind: 'page', id: page.id });
+        }
+    }
+
+    /**
+     * Patch the active page's stage (width/height/background) — the "no element
+     * selected" Page Settings panel target. Same clone-mutate-commit-undo shape
+     * as elementStore.updateElement, just for stage config instead of an element.
+     */
+    function updateStage(patch: Partial<Page['stage']>): void {
+        const page = getActivePageData();
+        if (!page) return;
+
+        const before = JSON.stringify(page);
+        const updated = deepClone(page);
+        updated.stage = { ...updated.stage, ...patch };
+
+        commitPageToCache(updated);
+        project.pushUndo({
+            label: 'Edit page settings',
+            scope: { kind: 'page', id: page.id },
+            before,
+            after: JSON.stringify(updated),
+        });
     }
 
     /**
@@ -275,7 +393,14 @@ export const usePagesStore = defineStore('pages', () => {
         const page = _withDefaults(snapshot);
         lru.set(pageId, page);
         _syncCache();
-        project.markDirty({ kind: 'page', id: pageId });
+        if (isComponentSurface(pageId)) {
+            project.updateComponent(pageId, {
+                rootIds: [...page.rootIds],
+                elementsById: { ...page.elements },
+            });
+        } else {
+            project.markDirty({ kind: 'page', id: pageId });
+        }
     }
 
     /* ----------------------------------------------------------
@@ -319,6 +444,11 @@ export const usePagesStore = defineStore('pages', () => {
         getActivePageData,
         getElementById,
 
+        // Component editing surfaces
+        openComponentSurface,
+        isComponentSurface,
+        activeSurfaceScope,
+
         // Load / unload
         loadPage,
         unloadPage,
@@ -326,6 +456,7 @@ export const usePagesStore = defineStore('pages', () => {
 
         // Write
         commitPageToCache,
+        updateStage,
         savePage,
         saveDirtyPages,
 

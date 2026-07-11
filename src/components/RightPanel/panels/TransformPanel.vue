@@ -43,6 +43,27 @@
                 </div>
             </div>
         </div>
+
+        <div class="flex gap-2 mt-2">
+            <button type="button" class="flip-btn" :class="{ active: scaleX < 0 }" title="Flip horizontal"
+                aria-label="Flip horizontal" aria-pressed="false" @click="flipHorizontal">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+                    <path d="M8 1.5v13" stroke-dasharray="2 2" />
+                    <path d="M3 4.5 5.5 8 3 11.5" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M13 4.5 10.5 8 13 11.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>Flip H</span>
+            </button>
+            <button type="button" class="flip-btn" :class="{ active: scaleY < 0 }" title="Flip vertical"
+                aria-label="Flip vertical" aria-pressed="false" @click="flipVertical">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+                    <path d="M1.5 8h13" stroke-dasharray="2 2" />
+                    <path d="M4.5 3 8 5.5 11.5 3" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M4.5 13 8 10.5 11.5 13" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>Flip V</span>
+            </button>
+        </div>
     </div>
 </template>
 
@@ -59,6 +80,10 @@
     function setScaleX(val: number) { update({ layout: { transform: { scaleX: val } } }); }
     function setScaleY(val: number) { update({ layout: { transform: { scaleY: val } } }); }
     function setRotation(val: number) { update({ layout: { transform: { rotation: val } } }); }
+
+    /** Flip = mirror across the element's own axis, i.e. flip the sign of the magnitude, preserving it. */
+    function flipHorizontal() { update({ layout: { transform: { scaleX: -(scaleX.value || 1) } } }); }
+    function flipVertical() { update({ layout: { transform: { scaleY: -(scaleY.value || 1) } } }); }
 </script>
 
 <style scoped>
@@ -81,4 +106,8 @@
     input[type=number]::-webkit-outer-spin-button,
     input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     /* input[type=number] { -moz-appearance: textfield; } */
+
+    .flip-btn { flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 5px; background: #0f172a; border: 1px solid #334155; color: #94a3b8; font-size: 11px; padding: 6px 0; border-radius: 6px; cursor: pointer; }
+    .flip-btn:hover { background: #1f2937; color: #e2e8f0; }
+    .flip-btn.active { background: #334155; border-color: #64748b; color: #f8fafc; }
 </style>

@@ -1,19 +1,24 @@
 import type {
     FlatHtmlElement,
     ContainerElement,
+    ComponentElement,
     SvgElement,
     Element,
     Layout,
     Effects,
     TextStyle,
+    ButtonStyle,
     ImageStyle,
     InputStyle,
     ContainerStyle,
     SvgStyle,
+    InputType,
 } from '../types/element';
 
 export type InsertableType =
     | 'text'
+    | 'textarea'
+    | 'label'
     | 'image'
     | 'video'
     | 'audio'
@@ -33,6 +38,7 @@ export type InsertableType =
     | 'header'
     | 'footer'
     | 'nav'
+    | 'slot'
     | 'rectangle'
     | 'square'
     | 'circle'
@@ -68,11 +74,29 @@ const defaultInteraction = () => ({
     animations: [],
 });
 
+/** Build a fresh instance of a library component to place on a page. */
+export function buildComponentInstance(componentId: string, name: string): ComponentElement {
+    return {
+        id: uid(),
+        name,
+        kind: 'component',
+        type: 'component',
+        componentId,
+        children: [],
+        props: {},
+        slots: {},
+        layout: defaultLayout(),
+        effects: defaultEffects(),
+        style: {},
+        interaction: defaultInteraction(),
+    };
+}
+
 // ─── FlatHtml builders ───────────────────────────────────────────────────────
 
 export function buildText(): FlatHtmlElement {
     const style: TextStyle = {
-        content: '',
+        content: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
         font: { size: 16, weight: 'normal', style: 'normal' },
         color: '#000000',
         align: 'left',
@@ -95,10 +119,11 @@ export function buildText(): FlatHtmlElement {
 
 export function buildImage(): FlatHtmlElement {
     const style: ImageStyle = {
-        src: '',
-        alt: '',
         fit: 'cover',
         position: 'center',
+        filters: {
+            brightness: 0,
+        },
     };
 
     return {
@@ -112,11 +137,12 @@ export function buildImage(): FlatHtmlElement {
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
+        attributes: { src: '', alt: 'add image source' },
     };
 }
 
 export function buildButton(): FlatHtmlElement {
-    const style: TextStyle = {
+    const style: ButtonStyle = {
         content: 'Button',
         font: { size: 14, weight: 'bold' },
         color: '#ffffff',
@@ -124,6 +150,10 @@ export function buildButton(): FlatHtmlElement {
         decoration: 'none',
         whiteSpace: 'nowrap',
         lineHeight: 1.4,
+        background: '#3b82f6',
+        border: { color: '#3b82f6', width: 0, style: 'solid' },
+        radius: 6,
+        padding: { top: 8, right: 16, bottom: 8, left: 16, locked: false },
     };
 
     return {
@@ -135,35 +165,66 @@ export function buildButton(): FlatHtmlElement {
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
+        attributes: { href: '', target: '_blank', role: 'button' },
     };
 }
 
-export function buildInput(): FlatHtmlElement {
+export function buildInput(type: InputType): FlatHtmlElement {
     const style: InputStyle = {
-        value: '',
-        placeholder: '',
-        disabled: false,
-        required: false,
+        ...buildText().style,
+        background: '#ffffff',
+        padding: 5,
+        border: { color: '#cccccc', width: 1, style: 'solid' },
+        radius: 0,
+        placeholderColor: '#cccccc',
     };
 
     return {
         id: uid(),
         name: 'Input',
         kind: 'flatHtml',
-        type: 'input',
+        type: 'textinput',
         layout: defaultLayout(),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
+        attributes: type === 'checkbox' || type === 'radio'
+            ? { type, checked: false }
+            : { type, value: '', placeholder: 'Enter text', disabled: false, required: false },
+    };
+}
+
+export function buildSelect(): FlatHtmlElement {
+    const style: InputStyle = {
+        ...buildText().style,
+        background: '#ffffff',
+        padding: 5,
+        border: { color: '#cccccc', width: 1, style: 'solid' },
+        radius: 0,
+        placeholderColor: '#cccccc',
+    };
+
+    return {
+        id: uid(),
+        name: 'Select',
+        kind: 'flatHtml',
+        type: 'select',
+        layout: defaultLayout(),
+        effects: defaultEffects(),
+        interaction: defaultInteraction(),
+        style,
+        attributes: { options: ['Option 1', 'Option 2', 'Option 3'], value: '', disabled: false, required: false },
     };
 }
 
 export function buildTextarea(): FlatHtmlElement {
     const style: InputStyle = {
-        value: '',
-        placeholder: '',
-        disabled: false,
-        required: false,
+        ...buildText().style,
+        background: '#ffffff',
+        padding: 5,
+        border: { color: '#cccccc', width: 1, style: 'solid' },
+        radius: 0,
+        placeholderColor: '#cccccc',
     };
 
     return {
@@ -175,6 +236,7 @@ export function buildTextarea(): FlatHtmlElement {
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
+        attributes: { rows: 4, cols: 50, placeholder: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', disabled: false, required: false },
     };
 }
 
@@ -200,6 +262,47 @@ export function buildLabel(): FlatHtmlElement {
     };
 }
 
+export function buildCode(): FlatHtmlElement {
+    const style: TextStyle = {
+        content: 'let info =  "Lorem ipsum dolor sit amet"',
+        decoration: 'none',
+        lineHeight: 1.4,
+        font: {
+            family: undefined,
+            size: 0,
+            weight: undefined,
+            style: undefined
+        },
+        color: ''
+    }
+
+    return {
+        id: uid(),
+        name: 'Code',
+        kind: 'flatHtml',
+        type: 'code',
+        layout: defaultLayout(),
+        effects: defaultEffects(),
+        interaction: defaultInteraction(),
+        style
+    }
+
+}
+
+function buildIIframe(): FlatHtmlElement {
+    return {
+        id: uid(),
+        name: 'Iframe',
+        kind: 'flatHtml',
+        type: 'iframe',
+        layout: defaultLayout('300px', '200px'),
+        effects: defaultEffects(),
+        interaction: defaultInteraction(),
+        style: { border: { color: '#cccccc', width: 1, style: 'solid' } },
+        attributes: { src: '', title: 'add iframe source', allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture', allowFullscreen: false },
+    };
+}
+
 // ─── Container builders ──────────────────────────────────────────────────────
 
 function buildContainer(
@@ -208,9 +311,9 @@ function buildContainer(
 ): ContainerElement {
     const style: ContainerStyle = {
         background: '#0000ff',
-        padding: 0,
-        border: { color: '#000000', width: 1, style: 'solid' },
-        radius: 0,
+        padding: 5,
+        border: { color: '#ff0000', width: 2, style: 'solid' },
+        radius: 5,
     };
 
     return {
@@ -220,14 +323,14 @@ function buildContainer(
         type,
         children: [],
         display: { mode: 'block' },
-        layout: defaultLayout('fill', '30px'),
+        layout: defaultLayout('fill'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
         style,
     };
 }
 
-function buildFlatHtmlGeneric(type: FlatHtmlElement['type']): FlatHtmlElement {
+function buildMediaGeneric(type: FlatHtmlElement['type']): FlatHtmlElement {
     return {
         id: uid(),
         name: type.charAt(0).toUpperCase() + type.slice(1),
@@ -236,7 +339,8 @@ function buildFlatHtmlGeneric(type: FlatHtmlElement['type']): FlatHtmlElement {
         layout: defaultLayout(),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
-        style: { src: '', autoplay: false, loop: false, muted: false, controls: true },
+        style: {},
+        attributes: { src: '', autoplay: false, loop: false, muted: false, controls: true },
     }
 }
 
@@ -251,29 +355,45 @@ function buildContainerGeneric(type: ContainerElement['type'], name: string): Co
         layout: defaultLayout('fill', '30px'),
         effects: defaultEffects(),
         interaction: defaultInteraction(),
-        style: { background: 'transparent', padding: 0 } as ContainerStyle,
+        style: { background: 'transparent', padding: 5 } as ContainerStyle,
     }
 }
+
 
 export function buildElement(type: InsertableType): Element {
     switch (type) {
         case 'text':
+            // 'text' is a real paragraph — buildText(), type:'text', tag <p>
+            // (see FLAT_HTML_TAG_MAP in resolver.ts). This used to call
+            // buildTextarea() instead, so the "Text" button in the Elements
+            // panel silently inserted a multi-line <textarea> input control
+            // rather than a plain text block; buildText() existed the whole
+            // time but was never actually reachable from the UI. The real
+            // textarea is now its own separate 'textarea' insertable so
+            // nothing is lost by fixing this.
             return buildText();
+        case 'textarea':
+            return buildTextarea();
+        case 'label':
+            return buildLabel();
         case 'image':
             return buildImage();
         case 'video':
-            return buildFlatHtmlGeneric('video');
+            return buildMediaGeneric('video');
         case 'audio':
-            return buildFlatHtmlGeneric('audio');
+            return buildMediaGeneric('audio');
         case 'iframe':
-            return buildFlatHtmlGeneric('video');
+            return buildIIframe();
         case 'button':
             return buildButton();
         case 'input':
-        case 'select':
+            return buildInput('text');
         case 'checkbox':
+            return buildInput('checkbox');
         case 'radio':
-            return buildInput();
+            return buildInput('radio');
+        case 'select':
+            return buildSelect();
         case 'form':
             return buildForm();
         case 'list':
@@ -281,7 +401,7 @@ export function buildElement(type: InsertableType): Element {
         case 'table':
             return buildContainerGeneric('div', 'Table');
         case 'code':
-            return buildFlatHtmlGeneric('textarea');
+            return buildCode();
         case 'div':
             return buildDiv();
         case 'section':
@@ -294,6 +414,8 @@ export function buildElement(type: InsertableType): Element {
             return buildFooter();
         case 'nav':
             return buildNav();
+        case 'slot':
+            return buildSlot();
         case 'rectangle':
             return buildRect();
         case 'square': {
@@ -350,6 +472,12 @@ export function buildElement(type: InsertableType): Element {
             const el = buildRect();
             el.name = 'Hotspot';
             el.type = 'hotspot';
+            // A hotspot is an interactive region, not a shape — buildRect()'s
+            // solid gray fill would make it look and behave like an actual
+            // visible rectangle, defeating the point. Dashed outline, no
+            // fill, so it's visible enough to select/edit in authoring
+            // without visually competing with real shapes underneath it.
+            el.style = { fill: 'none', stroke: { color: '#6366f1', width: 1, style: 'dashed' } };
             el.geometry = { type: 'hotspot', width: 100, height: 100 };
             el.layout = defaultLayout('100px', '100px');
             return el;
@@ -369,6 +497,22 @@ export const buildFooter = (): ContainerElement => buildContainer('footer', 'Foo
 export const buildNav = (): ContainerElement => buildContainer('nav', 'Nav');
 export const buildForm = (): ContainerElement => buildContainer('form', 'Form');
 export const buildList = (): ContainerElement => buildContainer('list', 'List');
+
+/** A slot placeholder. Lives inside a component definition; at instance render
+ *  time render-bridge swaps its contents for the instance's own children. Its
+ *  own children act as fallback/placeholder content shown in the definition
+ *  editor (and when an instance provides no children). */
+export const buildSlot = (): ContainerElement => {
+    const el = buildContainerGeneric('slot', 'Slot');
+    el.layout = defaultLayout('fill', 'auto');
+    el.style = {
+        background: 'transparent',
+        padding: 8,
+        border: { color: '#0ea5e9', width: 1, style: 'dashed' },
+        radius: 4,
+    } as ContainerStyle;
+    return el;
+};
 
 // ─── SVG builders ────────────────────────────────────────────────────────────
 

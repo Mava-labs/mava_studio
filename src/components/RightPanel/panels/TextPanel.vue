@@ -3,6 +3,26 @@
         <h3 class="section-title mb-3">Text</h3>
 
         <div class="flex flex-col gap-2">
+            <!-- Content: double-click the element on canvas to edit in place;
+                 this is the fallback for elements too small/awkward to reach that way. -->
+            <div class="field-col">
+                <span class="clab">Content</span>
+                <textarea class="sel content-area" rows="2" :value="content"
+                    @change="setContent(($event.target as HTMLTextAreaElement).value)"
+                    aria-label="Text content" />
+            </div>
+
+            <div v-if="isPlainText" class="field-col">
+                <span class="clab">Tag</span>
+                <div class="seg5" role="group" aria-label="Text tag">
+                    <button type="button" class="seg5-btn" :class="{ selected: textTag === 'p' }" title="Paragraph — block text" @click="setTextTag('p')">P</button>
+                    <button type="button" class="seg5-btn" :class="{ selected: textTag === 'span' }" title="Span — inline text, width follows content" @click="setTextTag('span')">Span</button>
+                    <button type="button" class="seg5-btn" :class="{ selected: textTag === 'h1' }" title="Heading 1" @click="setTextTag('h1')">H1</button>
+                    <button type="button" class="seg5-btn" :class="{ selected: textTag === 'h2' }" title="Heading 2" @click="setTextTag('h2')">H2</button>
+                    <button type="button" class="seg5-btn" :class="{ selected: textTag === 'h3' }" title="Heading 3" @click="setTextTag('h3')">H3</button>
+                </div>
+            </div>
+
             <!-- Row 1: Font family + size -->
             <div class="row">
                 <div class="field">
@@ -44,14 +64,14 @@
                     </select>
                 </div>
                 <div class="field">
-                    <!-- <span class="clab">Case</span> -->
-                    <select class="sel" :value="textTransform"
-                        @change="setTextTransform(($event.target as HTMLSelectElement).value as any)">
-                        <option value="normal">Normal</option>
-                        <option value="uppercase">Uppercase</option>
-                        <option value="lowercase">Lowercase</option>
-                        <option value="capitalize">Capitalize</option>
-                    </select>
+                    <div class="seg case-seg" role="group" aria-label="Text case">
+                        <button type="button" class="seg-btn case-btn" :class="{ selected: textTransform === 'uppercase' }"
+                            title="Uppercase" aria-label="Uppercase" @click="toggleTransform('uppercase')">AA</button>
+                        <button type="button" class="seg-btn case-btn" :class="{ selected: textTransform === 'capitalize' }"
+                            title="Capitalize" aria-label="Capitalize" @click="toggleTransform('capitalize')">Aa</button>
+                        <button type="button" class="seg-btn case-btn" :class="{ selected: textTransform === 'lowercase' }"
+                            title="Lowercase" aria-label="Lowercase" @click="toggleTransform('lowercase')">aa</button>
+                    </div>
                 </div>
             </div>
 
@@ -88,8 +108,8 @@
             <!-- Row 4: Color -->
             <div class="prop-row">
                 <span class="clab">Color</span>
-                <input type="color" class="color-chip" :value="fontColor"
-                    @input="setFontColor(($event.target as HTMLInputElement).value)" aria-label="Text color" />
+                <button type="button" class="color-chip" :style="{ background: fontColor }"
+                    @click="pickColor(fontColor, setFontColor)" aria-label="Text color" />
             </div>
 
             <!-- Row 5: Alignment + style buttons -->
@@ -163,15 +183,24 @@
 <script setup lang="ts" vapor>
     import { computed } from 'vue';
     import { useActiveElement } from '../../../composables/useActiveElement';
+    import { useNativeColorPicker } from '../../../composables/useNativeColorPicker';
     import type { TextStyle } from '../../../types/element';
 
     const { element, update } = useActiveElement();
+    const { pickColor } = useNativeColorPicker();
 
     const ts = computed(() => {
         const el = element.value;
-        if (!el || (el.type !== 'text' && el.type !== 'button' && el.type !== 'label')) return null;
+        if (!el || (el.type !== 'text' && el.type !== 'button' && el.type !== 'label' && el.type !== 'code')) return null;
         return el.style as TextStyle;
     });
+
+    const content = computed(() => ts.value?.content ?? '');
+    function setContent(v: string) { update({ style: { content: v } }); }
+
+    const isPlainText = computed(() => element.value?.type === 'text');
+    const textTag = computed(() => element.value?.layout.textTag ?? 'p');
+    function setTextTag(v: 'p' | 'span' | 'h1' | 'h2' | 'h3') { update({ layout: { textTag: v } }); }
 
     const fontFamily = computed(() => ts.value?.font.family ?? '');
     const fontSize = computed(() => ts.value?.font.size ?? 16);
@@ -194,6 +223,10 @@
     function setFontWeight(v: any) { font({ weight: v }); }
     function setFontColor(v: string) { update({ style: { color: v || '#ffffff' } }); }
     function setTextTransform(v: any) { update({ style: { transform: v } }); }
+    /** Icon buttons toggle like the Bold/Italic pattern: clicking the active case turns it back off (Normal). */
+    function toggleTransform(v: 'uppercase' | 'capitalize' | 'lowercase') {
+        setTextTransform(textTransform.value === v ? 'normal' : v);
+    }
     function setLineHeight(v: number) { update({ style: { lineHeight: v || 1 } }); }
     function setLetterSpacing(v: number) { update({ style: { letterSpacing: v || 0 } }); }
     function setAlign(v: 'left' | 'center' | 'right' | 'justify') { update({ style: { align: v } }); }
@@ -244,6 +277,26 @@
         gap: 6px;
         flex: 1 1 0;
         min-width: 0;
+    }
+
+    .field-col {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .content-area {
+        resize: vertical;
+        min-height: 40px;
+        font-family: inherit;
+    }
+
+    .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #cbd5e1;
     }
 
     .prop-row {
@@ -385,6 +438,26 @@
         background: #334155;
         color: #f8fafc;
     }
+
+    .case-seg {
+        width: 100%;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 2px;
+    }
+
+    .case-btn {
+        flex: 1 1 0;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 4px 0;
+    }
+
+    .seg5 { display: flex; border: 1px solid #334155; border-radius: 6px; overflow: hidden; }
+    .seg5-btn { flex: 1 1 0; background: #0f172a; border: none; color: #94a3b8; font-size: 10px; padding: 5px 0; cursor: pointer; }
+    .seg5-btn:hover { background: #1f2937; }
+    .seg5-btn.selected { background: #334155; color: #f8fafc; }
+    .seg5-btn + .seg5-btn { border-left: 1px solid #334155; }
 
     input[type=number]::-webkit-outer-spin-button,
     input[type=number]::-webkit-inner-spin-button {

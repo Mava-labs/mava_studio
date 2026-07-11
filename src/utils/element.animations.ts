@@ -142,6 +142,19 @@ export function cancelAllAnimations(elementId: string): void {
   runningAnimations.delete(elementId);
 }
 
+/**
+ * Jump all of an element's running animations to their end frame and hold
+ * (relies on `fill: 'forwards'`, already set in playAnimation's options).
+ * Used by the Trigger DSL's `finish` action.
+ */
+export function finishAllAnimations(elementId: string): void {
+  const handles = runningAnimations.get(elementId);
+  if (!handles) return;
+  for (const handle of handles.values()) {
+    handle.animation.finish();
+  }
+}
+
 // ─── Autoplay ─────────────────────────────────────────────────────────────────
 
 /**

@@ -21,7 +21,7 @@ import type {
     ProgramNode,
     GroupDefNode, NamedTriggerDefNode, TriggerDefNode,
     TriggerBodyNode, EventClauseNode, EventSpecNode,
-    SubjectNode, ConditionalBodyNode, ShortBodyNode,
+    SubjectNode, StructuralRefNode, ConditionalBodyNode, ShortBodyNode,
     ExprNode,
     ComparisonNode, IdentifierNode, LiteralNode,
     ActionNode, AssignActionNode,
@@ -40,12 +40,28 @@ import type { ScriptDef } from '../../types/project'
  * Passed in from the outside — validator has no store access.
  */
 export interface ProjectRegistry {
+    /** Keyed by element.id — the real, system-generated id (matches data-eid in the DOM). */
     elements: Record<string, Element>
+    /**
+     * Keyed by element.name — what an author actually types in DSL source
+     * ([brackets], group members). A name can map to more than one id if
+     * two elements share a name; see registryResolve.ts for how that's
+     * handled at each use site.
+     */
+    elementIdsByName: Record<string, string[]>
     variables: Record<string, VariableDef>
     scripts: Record<string, ScriptDef>
-    namedTriggers: Set<string>               // names declared in this DSL program
+    namedTriggers: Set<string>               // every named trigger name declared project-wide
+    /** name -> every document id that declares it — for cross-document duplicate detection. */
+    namedTriggerOwners: Record<string, string[]>
     pages: Set<string>               // page ids in the project
+    /** Keyed by page display name — what an author types in `{\p name}` / `navigate [name]`. */
+    pageIdsByName: Record<string, string[]>
     lessons: Set<string>               // lesson ids in the project
+    /** Keyed by lesson title — what an author types in `{\l name}`. */
+    lessonIdsByName: Record<string, string[]>
+    /** lesson id -> that lesson's first page id (by `order`) — the interpretation used for `navigate {\l name}`, since there's no other defined "enter a lesson" behavior anywhere in the app. */
+    lessonFirstPageId: Record<string, string>
 }
 
 // ─── Diagnostics ──────────────────────────────────────────────────────────────
@@ -120,6 +136,16 @@ function getLifecycleContext(eventName: string): LifecycleContext {
 export function validate(
     ast: ProgramNode,
     registry: ProjectRegistry,
+    /**
+     * The DSLTriggerDocument id this AST was parsed from — needed to tell
+     * "this name is declared here and nowhere else" apart from "this name
+     * collides with a different document" when checking
+     * registry.namedTriggerOwners. Omit only for standalone/test parsing
+     * that isn't tied to a real project document; the cross-document
+     * duplicate check is skipped in that case rather than risking a false
+     * positive against every other owner.
+     */
+    currentDocumentId?: string,
 ): ValidateResult {
 
     const diagnostics: ValidateDiagnostic[] = []
@@ -166,6 +192,26 @@ export function validate(
                     diag('E016', 'error', `Named trigger '${def.name}' is already declared.`, def)
                 } else {
                     declaredNamedTriggers.set(def.name, def)
+
+                    // Cross-document: named triggers are global (mava_syntax.md
+                    // §7), so a name can't collide with a DIFFERENT document's
+                    // declaration either, not just a repeat within this one.
+                    // Reject rather than silently disambiguate (e.g. a
+                    // timestamp suffix) — a silently-renamed trigger would
+                    // break every existing `trigger <name>` call site
+                    // referencing it, which is worse than making the author
+                    // pick a different name up front.
+                    if (currentDocumentId) {
+                        const owners = registry.namedTriggerOwners[def.name] ?? []
+                        const otherOwners = owners.filter(id => id !== currentDocumentId)
+                        if (otherOwners.length > 0) {
+                            diag(
+                                'E046', 'error',
+                                `Named trigger '${def.name}' is already declared in another trigger document. Trigger names are global — rename one of them.`,
+                                def,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -206,9 +252,13 @@ export function validate(
 
     function validateGroup(def: GroupDefNode) {
         if (def.groupKind === 'element') {
-            for (const id of def.members) {
-                if (!registry.elements[id]) {
-                    diag('E001', 'error', `Element '${id}' not found in project.`, def)
+            // Group members are element names, same as any bracketed
+            // element-list — not raw ids. Ambiguity (two elements sharing a
+            // name) isn't warned about here; it's warned once per actual use
+            // site instead (resolveElementIds), to avoid double-noise.
+            for (const name of def.members) {
+                if (!(registry.elementIdsByName[name]?.length)) {
+                    diag('E001', 'error', `Element '${name}' not found in project.`, def)
                 }
             }
         } else {
@@ -285,8 +335,20 @@ export function validate(
         // can't know at DSL compile time whether the page has a timeline
         if (event.name.startsWith('timeline.')) {
             diag(
-                'E014', 'error',
+                'W014', 'warning',
                 `'${event.name}' is a timeline event. Ensure this page has a timeline configured, otherwise this trigger will never fire.`,
+                event,
+            )
+        }
+
+        // quiz.* — no quiz feature exists yet anywhere in this app (no quiz
+        // element type, no quiz runtime to emit these), same unbuilt-feature
+        // situation as timeline.* above. Warn, don't block authoring ahead
+        // of the feature landing.
+        if (event.name.startsWith('quiz.')) {
+            diag(
+                'W015', 'warning',
+                `'${event.name}' has no quiz feature to emit it yet — this trigger will never fire until quizzes are implemented.`,
                 event,
             )
         }
@@ -301,13 +363,16 @@ export function validate(
     function validateSubject(subject: SubjectNode, _eventName: string, isNamed: boolean) {
         switch (subject.kind) {
             case 'element-list':
-                for (const id of subject.ids) {
-                    if (!registry.elements[id]) {
+                for (const name of subject.ids) {
+                    const matches = registry.elementIdsByName[name] ?? []
+                    if (matches.length === 0) {
                         if (isNamed) {
-                            diag('W005', 'warning', `Element '${id}' not found on current page — will error at invocation time.`, subject)
+                            diag('W005', 'warning', `Element '${name}' not found on current page — will error at invocation time.`, subject)
                         } else {
-                            diag('E001', 'error', `Element '${id}' not found in project.`, subject)
+                            diag('E001', 'error', `Element '${name}' not found in project.`, subject)
                         }
+                    } else if (matches.length > 1) {
+                        diag('W008', 'warning', `'${name}' matches ${matches.length} elements with the same name — all will be targeted. Rename elements to make this unambiguous.`, subject)
                     }
                 }
                 break
@@ -315,11 +380,11 @@ export function validate(
             case 'group':
                 for (const name of subject.ids) {
                     if (!declaredGroups.has(name)) {
-                        // Could be a single element id used without brackets
-                        if (registry.elements[name]) {
+                        // Could be an element name typed without brackets
+                        if (registry.elementIdsByName[name]?.length) {
                             diag(
                                 'W007', 'warning',
-                                `'${name}' looks like an element id. Did you mean [${name}]?`,
+                                `'${name}' looks like an element name. Did you mean [${name}]?`,
                                 subject,
                                 undefined,
                                 `[${name}]`,
@@ -342,16 +407,19 @@ export function validate(
                 break
 
             case 'structural-ref':
-                if (subject.ref) {
-                    const { refType, name } = subject.ref
-                    if (refType === 'p' && !registry.pages.has(name)) {
-                        diag('E001', 'error', `Page '${name}' not found in project.`, subject.ref)
-                    }
-                    if (refType === 'l' && !registry.lessons.has(name)) {
-                        diag('E001', 'error', `Lesson '${name}' not found in project.`, subject.ref)
-                    }
-                }
+                if (subject.ref) validateStructuralRef(subject.ref)
                 break
+        }
+    }
+
+    /** Shared by event subjects and action targets ({\p ...} is valid in both positions). */
+    function validateStructuralRef(ref: StructuralRefNode) {
+        const { refType, name } = ref
+        if (refType === 'p' && !(registry.pageIdsByName[name]?.length)) {
+            diag('E001', 'error', `Page '${name}' not found in project.`, ref)
+        }
+        if (refType === 'l' && !(registry.lessonIdsByName[name]?.length)) {
+            diag('E001', 'error', `Lesson '${name}' not found in project.`, ref)
         }
     }
 
@@ -547,8 +615,17 @@ export function validate(
             }
 
             // ── Trigger invocation ──────────────────────────────────────────
+            // Named triggers are global (mava_syntax.md §7) — the target may
+            // be declared in this document (declaredNamedTriggers, collected
+            // in Pass 1) or in a different one entirely (registry.namedTriggers,
+            // built by runner.ts's collectNamedTriggerNames() scanning every
+            // document in the project). registry.namedTriggers is already a
+            // superset that includes this document's own declarations, but
+            // declaredNamedTriggers is checked too so this still resolves
+            // correctly using only the current document's own AST in contexts
+            // that build a registry without the full project (e.g. tests).
             case 'TriggerAction': {
-                if (!declaredNamedTriggers.has(action.triggerName)) {
+                if (!declaredNamedTriggers.has(action.triggerName) && !registry.namedTriggers.has(action.triggerName)) {
                     diag('E004', 'error', `Named trigger '${action.triggerName}' is not defined.`, action)
                 }
                 break
@@ -563,13 +640,56 @@ export function validate(
 
     // ─── Target validators ────────────────────────────────────────────────────
 
+    /**
+     * Resolves a target/subject's raw entries (bracket list, or a declared
+     * group's members) — all author-typed element *names* — down to real
+     * element ids. Not-found entries pass through unchanged so the existing
+     * "not found" diagnostics below still fire, now quoting the exact name
+     * the author typed instead of an id they never saw. A name matching more
+     * than one element expands to all of them (like a mini group) with a
+     * one-time ambiguity warning here, rather than silently picking one.
+     */
     function resolveTargetIds(target: SubjectNode): string[] {
-        if (target.kind === 'element-list') return target.ids
-        if (target.kind === 'group') {
+        let rawNames: string[]
+        if (target.kind === 'element-list') rawNames = target.ids
+        else if (target.kind === 'group') {
             const group = declaredGroups.get(target.ids[0])
-            return group?.members ?? []
+            rawNames = group?.members ?? []
+        } else {
+            return []
         }
-        return []
+
+        const resolved: string[] = []
+        for (const name of rawNames) {
+            const matches = registry.elementIdsByName[name] ?? []
+            if (matches.length === 0) {
+                resolved.push(name)
+                continue
+            }
+            if (matches.length > 1) {
+                diag('W008', 'warning', `'${name}' matches ${matches.length} elements with the same name — all will be targeted. Rename elements to make this unambiguous.`, target)
+            }
+            resolved.push(...matches)
+        }
+        return resolved
+    }
+
+    /** Same as resolveTargetIds, but against page names — a bracketed lock/unlock/navigate target can only ever mean one page, so ambiguity picks the first match with a warning instead of expanding. */
+    function resolvePageTargetIds(target: SubjectNode): string[] {
+        if (target.kind !== 'element-list') return [] // pages have no group concept
+        const resolved: string[] = []
+        for (const name of target.ids) {
+            const matches = registry.pageIdsByName[name] ?? []
+            if (matches.length === 0) {
+                resolved.push(name)
+                continue
+            }
+            if (matches.length > 1) {
+                diag('W009', 'warning', `'${name}' matches ${matches.length} pages with the same name — the first match will be used. Rename pages to make this unambiguous.`, target)
+            }
+            resolved.push(matches[0])
+        }
+        return resolved
     }
 
     function validateTargetExistsAsElement(
@@ -698,11 +818,11 @@ export function validate(
     }
 
     function validateTargetIsPageOrSection(action: TargetedActionNode, _isNamed: boolean) {
-        const ids = resolveTargetIds(action.target)
+        const ids = resolvePageTargetIds(action.target)
         for (const id of ids) {
             if (!isPageOrSection(id, registry)) {
-                // Check if it's an element — common mistake
-                if (registry.elements[id]) {
+                // Check if it's actually an element name — common mistake
+                if (registry.elementIdsByName[id]?.length) {
                     diag(
                         'E010', 'error',
                         `'${action.type === 'LockAction' ? 'lock' : 'unlock'}' expects a page or section, but '${id}' is an element. Did you mean 'disable [${id}]'?`,
@@ -719,10 +839,15 @@ export function validate(
         const target = action.target
         if (target.kind === 'nav-keyword') return // 'next' and 'prev' are always valid
         if (target.kind === 'structural-ref') {
-            // Already validated in subject validator
+            // A structural-ref TARGET (not an event subject) was never
+            // actually reaching validateSubject() — that function is only
+            // called for event subjects, never action targets, despite this
+            // comment previously claiming otherwise. `navigate {\p typo}`
+            // compiled with zero diagnostics. Validate it directly here.
+            if (target.ref) validateStructuralRef(target.ref)
             return
         }
-        const ids = resolveTargetIds(target)
+        const ids = resolvePageTargetIds(target)
         for (const id of ids) {
             if (!registry.pages.has(id)) {
                 diag('E001', 'error', `Page '${id}' not found in project.`, action)

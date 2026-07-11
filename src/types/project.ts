@@ -5,6 +5,7 @@ import type {
     LessonCFAlignment,
     AssessmentCFAlignment,
 } from './cf-alignment.types';
+import type { VariableDef } from './variables';
 
 // Project data schema version (increment on breaking structural changes)
 export const CURRENT_PROJECT_VERSION = 2 as const;
@@ -38,6 +39,47 @@ export type Page = {
         width: number;
         height: number;
         background: string;
+        /**
+         * Round-trips through Rust's `Stage.display: serde_json::Value`
+         * (src-tauri/src/models/page.rs) — a free-form JSON passthrough field
+         * that already existed but was never populated by the frontend (its
+         * own comment: "GridDisplay | FlexDisplay", anticipating exactly
+         * this). Reusing it avoids repeating the exact "missing field
+         * `display`" save failure a *new* top-level Stage field would risk —
+         * Rust's struct only has this one flexible catch-all; anything else
+         * added here would need a matching Rust struct change, which this
+         * sandbox has no toolchain to make or verify (see CLEANUP_TODO.md).
+         */
+        display?: {
+            /** Uniform px value on all four sides — the "minimal real thing"
+             *  over a 4-side box editor for now; see element.ts's per-side
+             *  Spacing/BoxEdges if a page ever needs asymmetric padding. */
+            padding?: number;
+            margin?: number;
+            /**
+             * Unset defaults to 'auto' — a page's width/height are always
+             * explicit (required fields, never 'auto'/'hug' the way an
+             * element's can be), so it's always "constrained" in the same
+             * sense resolver.ts's resolveOverflow() means for elements;
+             * content that exceeds it should scroll rather than spill out
+             * or get silently clipped, unless the author overrides.
+             */
+            overflow?: 'visible' | 'hidden' | 'auto';
+            /** Governs how root-level elements (Page.rootIds) lay out against
+             *  each other — same mode/direction/justify/align/gap vocabulary
+             *  ContainerElement.layout already uses (see element.ts's
+             *  Layout), reused here rather than inventing a second
+             *  page-level layout model. */
+            layout?: {
+                mode: 'block' | 'flex' | 'grid';
+                direction?: 'row' | 'column';
+                justify?: string;
+                align?: string;
+                gap?: number;
+                columns?: string;
+                rows?: string;
+            };
+        };
     };
 
     elements: Record<string, Element>;
@@ -278,6 +320,46 @@ export type Course = {
  *   - CourseBrief (Mapper output) — recomputed on project open from app-data CF cache
  *   - InspectorReport — recomputed on project open and on content change
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT LIBRARY
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A reusable component in the shared library — a named element tree that pages
+ * instantiate (as a ComponentElement). Lives here (not in the store) so it can
+ * be part of ProjectData and round-trip fully; the store re-exports it.
+ */
+export interface ComponentDefinition {
+    id: string;
+    name: string;
+    /** Semver string e.g. "1.0.0". Bump on any structural change. */
+    version: string;
+    /** 'local' = authored here. 'marketplace' = imported, pinned. */
+    source: 'local' | 'marketplace';
+    /** Only set for marketplace components. */
+    marketplaceRef?: {
+        publisherId: string;
+        packageId: string;
+        pinnedVersion: string;
+        originUrl: string;
+    };
+    authorId: string;
+    rootIds: string[];
+    elementsById: Record<string, Element>;
+    /** Declared prop schema — what consumers can override at the usage site. */
+    props: ComponentPropSchema[];
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface ComponentPropSchema {
+    key: string;
+    type: 'string' | 'number' | 'boolean' | 'color' | 'image' | 'any';
+    defaultValue?: unknown;
+    required?: boolean;
+    description?: string;
+}
+
 export type ProjectData = {
     projectVersion: number;
     projectId: string;
@@ -291,8 +373,19 @@ export type ProjectData = {
     modulesById: Record<string, Module>;
     lessonsById: Record<string, Lesson>;
     pagesById: Record<string, Page>;
-    componentLibrary: Record<string, Element>;
-    mediaLibrary: Record<string, { id: string; name: string; type: string; url: string }>;
+    /**
+     * Full component definitions (round-tripped as a JSON blob on the Rust
+     * side — `component_library: HashMap<String, serde_json::Value>`). Was
+     * `Record<string, Element>` (only the root element survived save/load);
+     * now the whole definition — tree, props schema, version — persists.
+     */
+    componentLibrary: Record<string, ComponentDefinition>;
+    mediaLibrary: Record<string, { id: string; name: string; type: string; url: string; hash?: string; sizeBytes?: number; createdAt?: number }>;
+    /** stores/variables.ts's definitions — was never part of ProjectData at
+     *  all until now, so every save silently dropped authored variable
+     *  definitions and every Preview session started with an empty variable
+     *  store. See CLEANUP_TODO.md's long-standing "top blocker" note. */
+    variableDefinitions: Record<string, VariableDef>;
     dslTriggers: Record<string, DSLTriggerDocument>;
     actionScripts: Record<string, ScriptDef>;
 };

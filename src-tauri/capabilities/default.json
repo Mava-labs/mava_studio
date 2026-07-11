@@ -1,12 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Capability for the main window and the singleton preview window (labelled \"preview\", see composables/usePreview.ts)",
   "windows": [
-    "main"
+    "main",
+    "preview*"
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-create",
+    "core:window:allow-set-focus",
+    "core:event:default",
     "opener:default",
     "fs:default",
     "dialog:default",

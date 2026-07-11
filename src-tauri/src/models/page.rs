@@ -22,7 +22,14 @@ pub struct Stage {
     pub width:      f64,
     pub height:     f64,
     pub background: String,
-    pub display:    serde_json::Value, // GridDisplay | FlexDisplay
+    /// GridDisplay | FlexDisplay. The TS `Page['stage']` type
+    /// (types/project.ts) never declared this field, so every `save_page`
+    /// call with a frontend-built Page failed deserialization with "missing
+    /// field `display`" — the frontend has no way to send a value it doesn't
+    /// know exists. Defaults to `Value::Null` when absent instead of forcing
+    /// the frontend to round-trip a field it never reads or writes.
+    #[serde(default)]
+    pub display: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

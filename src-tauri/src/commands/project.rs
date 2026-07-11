@@ -182,6 +182,7 @@ pub async fn create_project(
         pages_by_id:       HashMap::new(), // pages owned by pagesStore
         component_library: HashMap::new(),
         media_library:     HashMap::new(),
+        variable_definitions: HashMap::new(),
         dsl_triggers:      HashMap::new(),
         action_scripts:    HashMap::new(),
     };

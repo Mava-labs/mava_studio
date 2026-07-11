@@ -3,7 +3,7 @@ use anyhow::Result;
 
 /// Current schema version for project databases.
 /// Increment this when the schema changes — add a migration arm below.
-const PROJECT_SCHEMA_VERSION: i64 = 1;
+const PROJECT_SCHEMA_VERSION: i64 = 2;
 
 /// Current schema version for the app state database.
 const APP_SCHEMA_VERSION: i64 = 1;
@@ -24,11 +24,13 @@ pub async fn run_project_migrations(pool: &SqlitePool) -> Result<()> {
 
     if version < 1 {
         apply_project_v1(pool).await?;
-        set_version(pool, "schema_version", PROJECT_SCHEMA_VERSION).await?;
+        set_version(pool, "schema_version", 1).await?;
     }
 
-    // Future migrations:
-    // if version < 2 { apply_project_v2(pool).await?; ... }
+    if version < 2 {
+        apply_project_v2(pool).await?;
+        set_version(pool, "schema_version", PROJECT_SCHEMA_VERSION).await?;
+    }
 
     Ok(())
 }
@@ -145,6 +147,30 @@ async fn apply_project_v1(pool: &SqlitePool) -> Result<()> {
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_undo_log_project
          ON undo_log (project_id, created_at)"
+    ).execute(pool).await?;
+
+    Ok(())
+}
+
+/// Locally-imported media (image/video/audio), content-addressed by SHA-256
+/// so re-importing the same file — or the same file used by multiple
+/// elements — only stores one copy. See commands/media.rs.
+async fn apply_project_v2(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS media_blobs (
+            hash       TEXT    PRIMARY KEY,
+            project_id TEXT    NOT NULL,
+            mime_type  TEXT    NOT NULL,
+            data       BLOB    NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES document(id)
+        )"
+    ).execute(pool).await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_media_blobs_project
+         ON media_blobs (project_id)"
     ).execute(pool).await?;
 
     Ok(())

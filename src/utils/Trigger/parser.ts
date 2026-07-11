@@ -79,9 +79,20 @@ export function parse(tokens: Token[]): ParseResult {
         }
         addDiag(
             'E026', 'error',
-            `Expected end of line but got '${current().value}'.`,
+            `Unexpected '${current().value}' — a statement should end here. Put the next statement on its own line.`,
             current(), current(),
         )
+        // Recover by skipping the rest of this line. Without this, a single
+        // stray token cascades: it fails this check, then chokes the next
+        // parse step (parseActions → expectKeyword('end') → the program loop),
+        // producing 3-4 diagnostics for one typo. Resyncing at the next line
+        // collapses that to one error here plus whatever the *next* line
+        // genuinely says.
+        while (
+            current().type !== TokenType.NEWLINE &&
+            current().type !== TokenType.EOF
+        ) advance()
+        skipNewlines()
     }
 
     // ── Matchers ──────────────────────────────────────────────────────────────
@@ -439,6 +450,8 @@ export function parse(tokens: Token[]): ParseResult {
         // Group name or bare identifier
         if (current().type === TokenType.IDENTIFIER) {
             const id = advance()
+            const missingBracket = takeMissingOpenBracket(id)
+            if (missingBracket) return missingBracket
             return {
                 type: 'Subject', kind: 'group', ids: [id.value],
                 line: id.line, col: id.col,
@@ -455,6 +468,30 @@ export function parse(tokens: Token[]): ParseResult {
         }
 
         return null
+    }
+
+    /**
+     * Common typo: a bracketed subject written without its opening '[', e.g.
+     * `on click continue_btn]`. Called right after consuming a bare identifier
+     * — if the very next token is ']', that's almost certainly a dropped '['.
+     * Consume the ']', emit ONE targeted error with a quick-fix, and return the
+     * intended element-list, instead of leaving the stray ']' to cascade into
+     * three or four unrelated parse errors down the line.
+     */
+    function takeMissingOpenBracket(id: Token): SubjectNode | null {
+        if (current().type !== TokenType.RBRACKET) return null
+        const rbracket = current()
+        advance() // consume the orphan ']'
+        // Range spans the identifier *through* the stray ']' so the quick-fix
+        // replaces the whole culprit (`continue_btn]` → `[continue_btn]`)
+        // rather than inserting at the identifier and leaving `[continue_btn]]`.
+        addDiag(
+            'E047', 'error',
+            `Missing '[' before '${id.value}'. Element lists are written like [${id.value}].`,
+            id, rbracket,
+            `[${id.value}]`,
+        )
+        return { type: 'Subject', kind: 'element-list', ids: [id.value], line: id.line, col: id.col }
     }
 
     function parseTimelineReachesSubject(start: Token): SubjectNode {
@@ -816,9 +853,11 @@ export function parse(tokens: Token[]): ParseResult {
         }
         if (current().type === TokenType.IDENTIFIER) {
             const id = advance()
+            const missingBracket = takeMissingOpenBracket(id)
+            if (missingBracket) return missingBracket
             return { type: 'Subject', kind: 'group', ids: [id.value], line: id.line, col: id.col }
         }
-        addDiag('E039', 'error', "Expected a target — [element_id], group_name, or {\\p page_name}.", current(), current())
+        addDiag('E039', 'error', "Expected a target — [element_name], group_name, or {\\p page_name}.", current(), current())
         return { type: 'Subject', kind: 'element-list', ids: [], line: start.line, col: start.col }
     }
 

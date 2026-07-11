@@ -87,6 +87,24 @@ CREATE TABLE IF NOT EXISTS undo_log (
 CREATE INDEX IF NOT EXISTS idx_undo_log_project
     ON undo_log (project_id, created_at);
 
+-- Locally-imported media (image/video/audio), content-addressed by SHA-256
+-- so the same file imported twice (or shared across pages) is only stored
+-- once. A MediaAsset's url becomes "mava-blob:<hash>" when it references a
+-- row here, vs. a real http(s) URL when the author deliberately links to an
+-- external resource — see commands/media.rs.
+CREATE TABLE IF NOT EXISTS media_blobs (
+    hash        TEXT    PRIMARY KEY,
+    project_id  TEXT    NOT NULL,
+    mime_type   TEXT    NOT NULL,
+    data        BLOB    NOT NULL,
+    size_bytes  INTEGER NOT NULL,
+    created_at  INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES document(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_blobs_project
+    ON media_blobs (project_id);
+
 -- ============================================================
 -- APP STATE DATABASE SCHEMA (app_state.sqlite)
 -- Stored in Tauri app data directory.

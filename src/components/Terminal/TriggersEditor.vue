@@ -11,6 +11,8 @@
     import { parse } from '../../utils/Trigger/parser'
     import { summarize } from '../../utils/Trigger/summarizer'
     import { validate } from '../../utils/Trigger/validator'
+    import { buildProjectRegistry, collectNamedTriggerNames, triggerAppliesToPage } from '../../utils/Trigger/runner'
+    import { sanitizeId } from '../../utils/Trigger/registryResolve'
 
     const project = useProjectMetadataStore()
     const terminal = useTerminalStore()
@@ -155,21 +157,18 @@
 
     const triggerItems = computed<TriggerPresentation[]>(() =>
         triggers.value
+            // Named (global) triggers are always listed; unnamed triggers only
+            // when their own page is focused — same rule Preview activation
+            // uses (runner.ts's triggerAppliesToPage), so the list matches what
+            // actually runs.
+            .filter(doc => triggerAppliesToPage(doc, pages.activePageId))
             .map(getTriggerPresentation)
             .sort((left, right) => left.title.localeCompare(right.title))
     )
 
-    const namedTriggerNames = computed(() => {
-        const names: string[] = []
-        for (const trigger of triggers.value) {
-            const lexResult = lex(trigger.dslSource)
-            const parsed = parse(lexResult.tokens)
-            for (const def of parsed.ast.body) {
-                if (def.type === 'NamedTriggerDef') names.push(def.name)
-            }
-        }
-        return [...new Set(names)].sort((left, right) => left.localeCompare(right))
-    })
+    const namedTriggerNames = computed(() =>
+        [...collectNamedTriggerNames(project.dslTriggers ?? {})].sort((left, right) => left.localeCompare(right))
+    )
 
     const monacoModel = computed<ScriptDef | null>(() => {
         if (!selectedTrigger.value) return null
@@ -191,25 +190,42 @@
     let lastCompileStatusKey = ''
     const quickFixByMarkerKey = new Map<string, string>()
 
+    /**
+     * Persist an edit to the selected trigger, self-healing its page binding.
+     * An unnamed trigger with no pageId is page-local but "unassigned" — it
+     * would leak to every page (runner.ts's triggerAppliesToPage treats a null
+     * pageId as global for back-compat). The moment it's edited, bind it to the
+     * page being edited so it stops leaking. Named triggers are global by
+     * definition, so they're left unbound.
+     */
+    function persistTriggerSource(value: string) {
+        const doc = selectedTrigger.value
+        if (!doc) return
+        const patch = { ...doc, dslSource: value }
+        if (patch.pageId == null) {
+            const isNamed = parse(lex(value).tokens).ast.body.some(d => d.type === 'NamedTriggerDef')
+            if (!isNamed && pages.activePageId) patch.pageId = pages.activePageId
+        }
+        project.upsertDslTrigger(patch)
+    }
+
     const { isReady, getEditor, getMonaco } = useMonaco(containerRef, monacoModel, {
         language: 'mava-trigger',
         onChange(value) {
             if (!selectedTrigger.value) return
-            project.upsertDslTrigger({
-                ...selectedTrigger.value,
-                dslSource: value,
-            })
+            persistTriggerSource(value)
             queueValidation(value)
         },
         async onSave(value) {
             if (!selectedTrigger.value) return
             isSaving.value = true
-            project.upsertDslTrigger({
-                ...selectedTrigger.value,
-                dslSource: value,
-            })
-            runValidation(value)
-            terminal.info(`Trigger ${selectedTrigger.value.id} saved.`)
+            persistTriggerSource(value)
+            // Save = the moment we write a compile summary to the Output tab.
+            const diagnostics = runValidation(value)
+            const displayName = triggerItems.value.find(item => item.id === selectedTrigger.value?.id)?.title
+                ?? selectedTrigger.value?.id
+                ?? 'trigger'
+            logCompileStatus(displayName, diagnostics)
             isSaving.value = false
         },
     })
@@ -238,25 +254,6 @@
         if (severity === 'error') return monaco.MarkerSeverity.Error
         if (severity === 'warning') return monaco.MarkerSeverity.Warning
         return monaco.MarkerSeverity.Info
-    }
-
-    function buildRegistry() {
-        const pagesCache = pages.pagesCache as Record<string, import('../../types/project').Page>
-        const elements = Object.values(pagesCache).reduce<Record<string, import('../../types/element').Element>>((acc, page) => {
-            for (const [id, el] of Object.entries(page.elements ?? {})) {
-                acc[id] = el as unknown as import('../../types/element').Element
-            }
-            return acc
-        }, {})
-
-        return {
-            elements,
-            variables: { ...variables.definitions },
-            scripts: { ...project.actionScripts },
-            namedTriggers: new Set(Object.keys(project.dslTriggers ?? {})),
-            pages: new Set(Object.keys(project.pageMetaById ?? {})),
-            lessons: new Set(Object.keys(project.lessonsById ?? {})),
-        }
     }
 
     function setModelDiagnostics(
@@ -320,10 +317,17 @@
         monaco.editor.setModelMarkers(model, markerOwner, markers)
     }
 
-    function runValidation(source: string) {
+    /**
+     * Live validation — recomputes diagnostics and paints inline Monaco
+     * markers (squiggles + quick-fixes). Does NOT write to the Output tab:
+     * that would spam a compile-status line on every keystroke. The Output
+     * tab gets a compile summary only on explicit save (see onSave →
+     * logCompileStatus), matching how scripts log on Ctrl+S.
+     */
+    function runValidation(source: string): Array<{ severity: 'error' | 'warning' | 'info' }> {
         const lexResult = lex(source)
         const parseResult = parse(lexResult.tokens)
-        const validateResult = validate(parseResult.ast, buildRegistry())
+        const validateResult = validate(parseResult.ast, buildProjectRegistry(), selectedTrigger.value?.id)
 
         const allDiagnostics = [
             ...lexResult.diagnostics,
@@ -332,10 +336,7 @@
         ]
 
         setModelDiagnostics(allDiagnostics)
-        const displayName = triggerItems.value.find(item => item.id === selectedTrigger.value?.id)?.title
-            ?? selectedTrigger.value?.id
-            ?? 'trigger'
-        logCompileStatus(displayName, allDiagnostics)
+        return allDiagnostics
     }
 
     function logCompileStatus(triggerName: string, diagnostics: Array<{ severity: 'error' | 'warning' | 'info' }>) {
@@ -502,15 +503,37 @@
                 const variableNames = Object.values(variables.definitions ?? {}).map(def => def.name)
                 const pageNames = Object.values(project.pageMetaById ?? {}).map(page => page.name)
                 const activePage = pages.getActivePageData()
-                const elementIds = activePage
-                    ? Object.values(activePage.elements ?? {}).map(element => element.id)
+                // Author-facing names, not element.id — the DSL is
+                // authored entirely in terms of names an author assigned
+                // (element name, page name, ...), never a system-generated
+                // id they never see. Suggesting .id here used to hand out
+                // completions that validator.ts would then reject.
+                const elementNames = activePage
+                    ? Object.values(activePage.elements ?? {}).map(element => element.name)
                     : []
 
-                for (const name of [...new Set([...triggerNames, ...scriptNames, ...variableNames, ...pageNames, ...elementIds])]) {
+                for (const name of [...new Set([...triggerNames, ...scriptNames, ...variableNames])]) {
                     items.push({
                         label: name,
                         kind: monaco.languages.CompletionItemKind.Variable,
                         insertText: name,
+                        range,
+                    })
+                }
+
+                // Element/page names are free text elsewhere in the app and
+                // can contain spaces or punctuation a DSL identifier can't
+                // (lexer.ts only allows [a-zA-Z0-9_]) — insert the sanitized
+                // form (matching runner.ts's registry, which resolves the
+                // same way), but keep the label as the real name so authors
+                // still recognize what they're picking.
+                for (const name of [...new Set([...pageNames, ...elementNames])]) {
+                    const sanitized = sanitizeId(name)
+                    items.push({
+                        label: name,
+                        kind: monaco.languages.CompletionItemKind.Variable,
+                        insertText: sanitized,
+                        detail: sanitized !== name ? `inserts as ${sanitized}` : undefined,
                         range,
                     })
                 }
@@ -535,7 +558,7 @@
                     {
                         label: 'named trigger',
                         kind: monaco.languages.CompletionItemKind.Snippet,
-                        insertText: 'trigger ${1:name}\n  on ${2:click} [${3:element_id}]\n  then\n    ${4:show} [${5:target}]\n  end\nend',
+                        insertText: 'trigger ${1:name}\n  on ${2:click} [${3:element_id}]\n  ${4:show} [${5:target}]\nend',
                         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                         documentation: 'Named reusable trigger definition',
                         range,
@@ -545,6 +568,24 @@
                 return { suggestions: items }
             },
         })
+    }
+
+    /** Look up an element on the current page by its sanitized (DSL-typed) name. */
+    function findElementByName(token: string) {
+        const page = pages.getActivePageData()
+        if (!page) return null
+        return Object.values(page.elements ?? {}).find(el => sanitizeId(el.name) === token) ?? null
+    }
+
+    function findPageByName(token: string) {
+        return Object.values(project.pageMetaById ?? {}).find(p => sanitizeId(p.name) === token) ?? null
+    }
+
+    function previewValue(value: unknown): string {
+        let s: string
+        try { s = typeof value === 'string' ? value : JSON.stringify(value) } catch { s = String(value) }
+        if (s == null) return ''
+        return s.length > 60 ? s.slice(0, 57) + '…' : s
     }
 
     function ensureHoverProvider() {
@@ -562,8 +603,46 @@
                 const lineSlice = lineContent.slice(Math.max(0, word.startColumn - 1))
                 const eventMatch = lineSlice.match(/^[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/)
                 const fullToken = eventMatch?.[0] ?? token
-                const doc = EVENT_DOCS[fullToken] ?? KEYWORD_DOCS[token]
-                if (!doc) return null
+
+                // Resolve, in priority order, what the token under the cursor
+                // means and describe it. Names are matched against the
+                // sanitized (DSL-typed) form, so multi-word "Submit Button"
+                // resolves from `Submit_Button`.
+                let markdown: string | null = EVENT_DOCS[fullToken] ?? KEYWORD_DOCS[token] ?? null
+
+                if (!markdown) {
+                    const varDef = variables.definitions[token]
+                    if (varDef) {
+                        const scope = varDef.scope === 'page' ? 'local (per page)' : 'global'
+                        const dv = previewValue(varDef.defaultValue)
+                        markdown =
+                            `**${varDef.name}** — variable\n\n` +
+                            `- type: \`${varDef.type}\`${varDef.type === 'list' && varDef.itemType ? ` of \`${varDef.itemType}\`` : ''}\n` +
+                            `- scope: ${scope}` +
+                            (dv !== '' ? `\n- default: \`${dv}\`` : '')
+                    }
+                }
+
+                if (!markdown) {
+                    const el = findElementByName(token)
+                    if (el) markdown = `**${el.name}** — element\n\n- type: \`${el.type}\`  (\`${el.kind}\`)`
+                }
+
+                if (!markdown) {
+                    const page = findPageByName(token)
+                    if (page) markdown = `**${page.name}** — page`
+                }
+
+                if (!markdown && namedTriggerNames.value.includes(token)) {
+                    markdown = `**${token}** — named trigger\n\nGlobal, reusable. Invoke with \`trigger ${token}\`.`
+                }
+
+                if (!markdown) {
+                    const script = Object.values(project.actionScripts ?? {}).find(s => s.name === token)
+                    if (script) markdown = `**${script.name}** — script\n\nRun with \`execute ${script.name}\`.`
+                }
+
+                if (!markdown) return null
 
                 return {
                     range: new monaco.Range(
@@ -572,7 +651,7 @@
                         position.lineNumber,
                         word.endColumn,
                     ),
-                    contents: [{ value: doc }],
+                    contents: [{ value: markdown }],
                 }
             },
         })

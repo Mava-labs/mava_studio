@@ -11,6 +11,7 @@
     import { useNotificationStore } from '../../stores/notification'
     import { useProjectMetadataStore } from '../../stores/projectMetadata'
     import { useVariableStore } from '../../stores/variables'
+    import { usePagesStore } from '../../stores/pages'
     import type { DSLTriggerDocument, ScriptDef } from '../../types/project'
 
     const terminal = useTerminalStore()
@@ -19,6 +20,7 @@
     const notification = useNotificationStore()
     const project = useProjectMetadataStore()
     const variableStore = useVariableStore()
+    const pages = usePagesStore()
 
     const isTerminalLocked = computed(() => stage.currentStage === 'empty' || !project.isProjectOpen)
 
@@ -100,7 +102,14 @@
                 id,
                 name: `Script_${Object.keys(project.actionScripts ?? {}).length + 1}`,
                 scope: 'global',
-                codeTs: '// Write your script here\n',
+                codeTs: [
+                    '// Variables live on `mava` — read/write them like normal JS:',
+                    '//   mava.score = 10',
+                    '//   if (mava.username) { ... }',
+                    '//   mava.watch("score", v => console.log("score:", v))',
+                    '// Also available: stage, element(id), project, fetch.',
+                    '',
+                ].join('\n'),
             }
 
             project.upsertScript(script)
@@ -125,9 +134,14 @@
             const triggerId = Math.random().toString(36).slice(2)
             const trigger: DSLTriggerDocument = {
                 id: triggerId,
-                scope: 'global',
-                pageId: null,
-                dslSource: '// Untitled trigger\non mount [Page_1]\nthen greeting = "Hello"\n',
+                // Page-local by default — tied to whichever page is focused at
+                // creation. It stays page-local unless the author turns it into
+                // a named trigger (`trigger foo ... end`), at which point it's
+                // treated as global (runner.ts's triggerAppliesToPage). scope
+                // is kept for back-compat but no longer drives listing/activation.
+                scope: 'page',
+                pageId: pages.activePageId,
+                dslSource: '// New trigger — say what it does\non click [element_name]\n  show [target_name]\nend\n',
                 enabled: true,
                 createdAt: now,
                 updatedAt: now,

@@ -67,7 +67,7 @@
 
 <script setup lang="ts" vapor>
 
-    import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
     import AppHeader from './components/AppHeader.vue';
     import SideNav from './components/SideNav.vue';
     import NavAssociates from './components/NavAssociates.vue';
@@ -82,12 +82,29 @@
     import { useLayoutStore } from './stores/layout';
     import { useNotificationStore } from './stores/notification';
     import { useProjectMetadataStore } from './stores/projectMetadata';
+    import { usePagesStore } from './stores/pages';
     import { useStageStore } from './stores/stage';
+    import { useTerminalStore } from './stores/terminal';
+    import { useUndoRedo } from './composables/useUndoRedo';
+    import { useDeleteSelection } from './composables/useDeleteSelection';
+    import { listenPreviewLog, emitPreviewSyncPage } from './utils/previewBridge';
+    import type { UnlistenFn } from '@tauri-apps/api/event';
 
     const layout = useLayoutStore();
     const notification = useNotificationStore();
     const stage = useStageStore();
     const project = useProjectMetadataStore();
+    const pages = usePagesStore();
+    const terminal = useTerminalStore();
+
+    // Owns its own Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y keyboard bindings —
+    // mounted once here per useUndoRedo's own doc comment ("mount once in
+    // the root editor layout while a project is open").
+    useUndoRedo();
+
+    // Delete/Backspace on the current canvas selection — elementStore.removeElement()
+    // existed with no way to trigger it at all until now.
+    useDeleteSelection();
 
     let asideEl = useTemplateRef('asideEl');
     let terminalEl = useTemplateRef('terminalEl');
@@ -179,34 +196,48 @@
     }
 
 
+    // Preview opens in a separate OS window with its own store instances —
+    // this relays its terminal/console output into this window's Output tab.
+    // See utils/previewBridge.ts for why a Tauri event is required here.
+    let unlistenPreviewLog: UnlistenFn | null = null;
+    listenPreviewLog((payload) => {
+        const prefixed = `[Preview] ${payload.message}`;
+        if (payload.level === 'error') terminal.error(prefixed);
+        else if (payload.level === 'warn') terminal.warn(prefixed);
+        else terminal.info(prefixed);
+    }).then((unlisten) => { unlistenPreviewLog = unlisten; });
+
+    // Live preview: broadcast the active page on every edit (debounced) so an
+    // already-open preview window can apply it directly — see PreviewApp.vue's
+    // listenPreviewSyncPage handler and previewBridge.ts's file header for why
+    // this goes over a Tauri event instead of shared state. Deliberately
+    // scoped to page/element content only — trigger and script edits don't
+    // live-sync (would mean re-running codegen/re-activating on every
+    // keystroke in the Monaco editors), and switching pages in the authoring
+    // window doesn't change what the preview window is showing.
+    let syncPageTimer: ReturnType<typeof setTimeout> | null = null;
+    watch(
+        () => pages.getActivePageData(),
+        (page) => {
+            if (!page) return;
+            if (syncPageTimer) clearTimeout(syncPageTimer);
+            syncPageTimer = setTimeout(() => emitPreviewSyncPage(page), 150);
+        },
+        { deep: true }
+    );
+
     onMounted(() => {
         // Ensure initial element sizes reflect store values
         if (asideEl.value) asideEl.value.style.width = `${layout.asideWidth}px`;
         if (terminalEl.value) terminalEl.value.style.height = `${layout.terminalState === 'closed' ? 0 : layout.terminalHeight}px`;
 
-        // Global undo/redo/delete shortcuts
+        // Undo/redo (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) is handled by useUndoRedo() above.
+        // This handler is reserved for other global shortcuts (e.g. delete) once
+        // that logic is re-implemented against the current stores.
         const onKey = (e: KeyboardEvent) => {
             const active = document.activeElement as HTMLElement | null;
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
                 return; // don't hijack text inputs
-            }
-            const isMac = navigator.platform.toUpperCase().includes('MAC');
-            const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
-            if (!ctrlOrCmd) return;
-            const key = e.key.toLowerCase();
-            // Redo: Ctrl+Shift+Z or Ctrl+Y
-            if ((key === 'z' && e.shiftKey) || key === 'y') {
-                e.preventDefault();
-                // TODO: implement redo logic
-                // redo();
-                return;
-            }
-            // Undo: Ctrl+Z
-            if (key === 'z') {
-                e.preventDefault();
-                // TODO: implement undo logic
-                // undo();
-                return;
             }
 
             // TODO: re-implement delete functionality if needed
@@ -227,4 +258,9 @@
 
         return () => window.removeEventListener('keydown', onKey, { capture: true } as any);
     })
+
+    onBeforeUnmount(() => {
+        unlistenPreviewLog?.();
+        if (syncPageTimer) clearTimeout(syncPageTimer);
+    });
 </script>

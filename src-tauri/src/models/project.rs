@@ -221,6 +221,54 @@ pub struct MediaAsset {
     pub created_at: i64,
 }
 
+// ── Variable definition ─────────────────────────────────────────────────────────
+//
+// Matches TS types/variables.ts's VariableDef. This is the field that was
+// missing entirely until now — stores/variables.ts's definitions were never
+// part of ProjectData, so every saved project silently lost its authored
+// variable definitions (VariablesRegistry.vue's "Changes saved to disk" was
+// therefore not actually true for anything variable-related), and every
+// Preview session started with a completely empty variable store.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariableDef {
+    pub id:       String,
+    pub name:     String,
+    #[serde(rename = "type")]
+    pub kind:     String,
+    pub scope:    String,
+    pub default_value: serde_json::Value,
+    // Only meaningful when kind == "list" — declares what each item is
+    // (itemType) and, when itemType == "object", the item's fields
+    // (itemShape). Option<T> deserializes a missing key as None with no
+    // #[serde(default)] needed (unlike Vec<T>/struct fields elsewhere in
+    // this codebase), so loading a project saved before this field existed
+    // is not a breaking read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_shape: Option<Vec<ListItemField>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_on_before_mount:  Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_on_mount:         Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_on_before_unmount: Option<bool>,
+}
+
+/// Matches TS types/variables.ts's ListItemField — one named field in an
+/// object-shaped list item's declared shape. Deliberately flat: `kind` is
+/// always "string" | "number" | "boolean", never "list"/"object", so this
+/// struct never needs to recurse.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListItemField {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
 // ── DSL trigger ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,6 +322,12 @@ pub struct ProjectData {
     pub pages_by_id:      HashMap<String, serde_json::Value>,
     pub component_library: HashMap<String, serde_json::Value>,
     pub media_library:    HashMap<String, MediaAsset>,
+    /// #[serde(default)] — a project saved before this field existed has no
+    /// key for it at all; same "missing field" failure mode already hit
+    /// once for Stage.display (see db/migrations.rs's history) if this were
+    /// required instead of defaulted.
+    #[serde(default)]
+    pub variable_definitions: HashMap<String, VariableDef>,
     pub dsl_triggers:     HashMap<String, DslTrigger>,
     pub action_scripts:   HashMap<String, ActionScript>,
 }

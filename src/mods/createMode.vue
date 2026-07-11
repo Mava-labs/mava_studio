@@ -8,12 +8,18 @@
                 <div v-for="tab in openPageTabs" :key="tab.id"
                     :data-tab-id="tab.id"
                     class="group relative cursor-pointer flex items-center justify-between gap-2 pl-3 pr-1 py-2 text-sm transition border-r border-slate-200 dark:border-slate-700 shrink-0"
-                    :class="tab.isActive
-                        ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 shadow-inner'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    :class="[
+                        tab.isActive
+                            ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 shadow-inner'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
+                        tab.isComponent ? 'border-t-2 border-t-sky-500' : ''
+                    ]"
                 >
                     <button type="button" class="min-w-0 flex-1 text-left" @click="switchPage(tab.id)">
-                        <span class="truncate max-w-48 block">{{ tab.title }}</span>
+                        <span class="truncate max-w-48 flex items-center gap-1.5">
+                            <span v-if="tab.isComponent" class="text-sky-500 shrink-0" title="Component">◈</span>
+                            <span class="truncate">{{ tab.title }}</span>
+                        </span>
                     </button>
                     <button
                         type="button"
@@ -80,9 +86,11 @@
                             Stage root — element DOM nodes are appended and managed here by the vue.
                         -->
                         <div v-if="project.course" ref="stageRef" class="canvas-stage" :style="stageStyle"
-                            @click.self="clearSelection">
-                            <CanvasNode v-for="rootId in rootIds" :key="rootId" :id="rootId" />
+                            @pointerdown="handleStagePointerDown"
+                            @click="handleStageClick" @dblclick="handleStageDblClick"
+                            @mousemove="handleStageMouseMove" @mouseleave="onMouseLeave">
 
+                            <div ref="stageContentRef" style="display: contents" />
                             <!-- Overlay is sibling to canvas content, position: absolute over it -->
                             <EditorOverlay :stage-ref="stageRef" />
                         </div>
@@ -101,14 +109,19 @@
         computed, onMounted, provide,
         useTemplateRef, watch, nextTick,
         CSSProperties,
+        onUnmounted,
+        watchEffect,
     } from 'vue';
     import { storeToRefs } from 'pinia';
     import { usePagesStore } from '../stores/pages';
     import { useProjectMetadataStore } from '../stores/projectMetadata';
-    import CanvasNode from '../components/CanvasNode.vue';
+    import { mountElement } from '../components/renderers/render-bridge'
     import EditorOverlay from '../components/EditorOverlay.vue';
     import { useStageStore } from '../stores/stage';
     import { useEditorSelection } from '../composables/useEditorSelection';
+    import { useElementDragResize } from '../composables/useElementDragResize';
+    import { useElementReorder } from '../composables/useElementReorder';
+    import { useTextEditing } from '../composables/useTextEditing';
 
     // ─── Stores ───────────────────────────────────────────────────────────────────
 
@@ -135,8 +148,176 @@
     const rootIds = computed(() => page.value?.rootIds ?? [])
     const stageRef = useTemplateRef('stageRef')
 
-    const { clearSelection } = useEditorSelection()
+    const { clearSelection, onClick: onElementClick, onDblClick: onElementDblClick, onMouseEnter, onMouseLeave, selectOnly, selectedIds } = useEditorSelection()
+    const { startDrag } = useElementDragResize()
+    const { startReorder } = useElementReorder()
+    const { editingId, canEdit, startEditing } = useTextEditing()
 
+    /**
+     * Delegated on the stage root rather than per-element — every rendered
+     * node carries `data-eid` (render-bridge.ts), so a single listener here
+     * covers the whole tree instead of attaching N listeners to N elements.
+     * Walks from the click target up to the stage looking for `[data-eid]`
+     * ancestors: `targetId` is the deepest one (what's actually under the
+     * pointer), `rootId` is the outermost one (what a first click should
+     * select — see useEditorSelection's three-tier resolution).
+     */
+    function resolveClickIds(target: HTMLElement): { rootId: string; targetId: string } | null {
+        const stage = stageRef.value
+        if (!stage) return null
+
+        const targetEl = target.closest<HTMLElement>('[data-eid]')
+        if (!targetEl || !stage.contains(targetEl)) return null
+
+        const targetId = targetEl.getAttribute('data-eid')!
+        let rootId = targetId
+        let node: HTMLElement | null = targetEl
+        while (node && node !== stage) {
+            const eid = node.getAttribute('data-eid')
+            if (eid) rootId = eid
+            node = node.parentElement
+        }
+
+        return { rootId, targetId }
+    }
+
+    /**
+     * A drag gesture started directly on any element under the pointer —
+     * without this, reaching an element nested inside a container (a button
+     * inside a div, say) took two separate interactions before you could even
+     * begin dragging it: one click to select the container (three-tier
+     * click resolution always lands on the root first), a second click to
+     * drill into the child, and only then would its selection ring exist for
+     * a third gesture to grab. That's not how direct manipulation is
+     * supposed to feel — a press-and-drag conveys unambiguous intent about
+     * *which* element you mean, so this bypasses the click-tiering rules
+     * entirely and always targets whatever's literally under the pointer.
+     *
+     * Click-to-select's three-tier drill-down (see useEditorSelection.ts) is
+     * untouched for plain clicks — only a gesture that actually crosses the
+     * drag threshold (startDrag/startReorder's own arming) takes this path;
+     * `suppressNextClick` stops the click handler below from then re-running
+     * its own resolution against a selection this gesture already changed.
+     */
+    let suppressNextClick = false
+
+    function handleStagePointerDown(event: PointerEvent) {
+        if (event.button !== 0) return
+        const stage = stageRef.value
+        if (!stage) return
+
+        // A double-click already put this element into contentEditable mode
+        // (useTextEditing.ts) — let native caret placement/text selection
+        // inside it work normally rather than treating this pointerdown as
+        // the start of a drag. Without this, every click meant to reposition
+        // the cursor while typing would instead arm a drag/reselect.
+        if (editingId.value) {
+            const editingNode = stage.querySelector<HTMLElement>(`[data-eid="${editingId.value}"]`)
+            if (editingNode?.contains(event.target as Node)) return
+        }
+
+        const ids = resolveClickIds(event.target as HTMLElement)
+        if (!ids) return
+
+        /**
+         * Native form controls (input/textarea/select/...) claim pointerdown
+         * for their own interaction — focusing, placing a caret, and on
+         * continued movement, a native text-selection drag — before our own
+         * arming listeners ever get a say. That's why a text input couldn't
+         * be dragged at all: the browser was treating the gesture as "select
+         * this text," not "move this element." preventDefault() on the
+         * pointerdown suppresses that default action (selection/focus)
+         * without affecting the 'click'/'dblclick' events our own selection
+         * logic relies on, so this is safe alongside handleStageClick.
+         * Authoring mode isn't meant to expose native interactivity on
+         * canvas elements at all (typing into a live input, following a
+         * link, etc.) — this is also the first piece of that, ahead of the
+         * broader pass to disable it consistently everywhere.
+         */
+        event.preventDefault()
+
+        const targetId = ids.targetId
+        const dragWholeSelection = selectedIds.value.size > 1 && selectedIds.value.has(targetId)
+        const dragIds = dragWholeSelection ? [...selectedIds.value] : [targetId]
+
+        function onCommit() {
+            if (!dragWholeSelection) selectOnly(targetId)
+            suppressNextClick = true
+        }
+
+        const el = pages.getElementById(targetId)
+        const isPositioned = !!el?.layout.position && el.layout.position !== 'static'
+
+        if (dragIds.length === 1 && isPositioned) {
+            startDrag(event, dragIds, stage, onCommit)
+        } else {
+            startReorder(event, dragIds, stage, onCommit)
+        }
+    }
+
+    function handleStageClick(event: MouseEvent) {
+        // Clicking inside the actively-editing node is repositioning the
+        // caret, not making a selection — don't re-run selection resolution
+        // on top of it (matches the same bypass in handleStagePointerDown).
+        if (editingId.value) {
+            const editingNode = stageRef.value?.querySelector<HTMLElement>(`[data-eid="${editingId.value}"]`)
+            if (editingNode?.contains(event.target as Node)) return
+        }
+
+        // Suppresses native click-triggered defaults — a button/link inside
+        // the stage would otherwise navigate or submit a form, a checkbox
+        // would toggle its own checked state on click. None of that is
+        // authoring; the pointerdown-level preventDefault() above only
+        // covers focus/caret/native-drag defaults, not these — click has its
+        // own separate default action. Doesn't affect this handler itself or
+        // onElementClick() below: preventDefault() never stops propagation
+        // or other listeners from running, only the browser's built-in action.
+        event.preventDefault()
+
+        if (suppressNextClick) {
+            suppressNextClick = false
+            return
+        }
+
+        const ids = resolveClickIds(event.target as HTMLElement)
+        if (!ids) {
+            clearSelection()
+            return
+        }
+        onElementClick(ids.rootId, ids.targetId, event)
+    }
+
+    function handleStageDblClick(event: MouseEvent) {
+        const ids = resolveClickIds(event.target as HTMLElement)
+        if (!ids) return
+        onElementDblClick(ids.targetId, event)
+
+        // Text/label/button/code elements enter contentEditable mode on the
+        // same double-click that selects them — direct manipulation, same as
+        // Figma/Framer, rather than routing every content edit through the
+        // properties panel (which, before this, had no plain-text field for
+        // it at all — style.content was only reachable via variable binding).
+        if (canEdit(ids.targetId) && stageRef.value) {
+            startEditing(ids.targetId, stageRef.value)
+        }
+    }
+
+    function handleStageMouseMove(event: MouseEvent) {
+        const targetEl = (event.target as HTMLElement).closest<HTMLElement>('[data-eid]')
+        const id = targetEl?.getAttribute('data-eid') ?? null
+        if (id) onMouseEnter(id)
+        else onMouseLeave()
+    }
+
+    /**
+     * `.canvas-stage`'s two DOM children are `stageContentRef` (root
+     * elements, `display: contents` — transparent to layout, so its own
+     * children become direct flex/grid items of the stage itself) and
+     * `EditorOverlay` (`position: absolute`, so flex/grid ignores it
+     * entirely, same as any out-of-flow element). That's what makes it safe
+     * to put flex/grid display directly on the stage: only the real root
+     * elements ever participate as items.
+     */
     const stageStyle = computed<CSSProperties>(() => {
         const s = page.value?.stage
 
@@ -149,11 +330,36 @@
             }
         }
 
+        const d = s.display ?? {}
+        const l = d.layout ?? { mode: 'block' as const }
+
+        const layoutStyle: CSSProperties = l.mode === 'flex'
+            ? {
+                display: 'flex',
+                flexDirection: l.direction || 'row',
+                justifyContent: l.justify || 'flex-start',
+                alignItems: l.align || 'stretch',
+                gap: l.gap ? `${l.gap}px` : '0px',
+            }
+            : l.mode === 'grid'
+                ? {
+                    display: 'grid',
+                    gridTemplateColumns: l.columns || '1fr',
+                    gridTemplateRows: l.rows || undefined,
+                    gap: l.gap ? `${l.gap}px` : '0px',
+                }
+                : { display: 'block' }
+
         return {
             position: 'relative',
             width: `${s.width}px`,
             height: `${s.height}px`,
             background: s.background ?? '#fff',
+            padding: d.padding ? `${d.padding}px` : '0px',
+            margin: d.margin ? `${d.margin}px` : '0px',
+            overflow: d.overflow || 'auto',
+            boxSizing: 'border-box',
+            ...layoutStyle,
         }
   })
     const elements = computed(() => page.value?.elements ?? {})
@@ -193,6 +399,7 @@
                 id: page.id,
                 title: page.metadata.title || 'Untitled page',
                 isActive: page.id === activePageId.value,
+                isComponent: pages.isComponentSurface(page.id),
             }))
             .sort((a, b) => {
                 const ai = pageOrderIndex.value[a.id] ?? Number.MAX_SAFE_INTEGER;
@@ -320,6 +527,40 @@
             });
         });
     }
+
+    const stageContentRef = useTemplateRef<HTMLElement>('stageContentRef')
+
+    const cleanups: Array<() => void> = []
+
+    watchEffect(() => {
+        // clean up previous mounts whenever rootIds or elements change
+        cleanups.forEach(fn => fn())
+        cleanups.length = 0
+
+        const container = stageContentRef.value
+        if (!container) return
+
+        const els = elements.value
+        const ids = rootIds.value
+
+        for (const id of ids) {
+            const el = els[id]
+            if (!el) continue
+
+            const cleanup = mountElement(
+                () => els[id],
+                undefined,
+                container,
+                elements.value,
+                true
+            )
+            cleanups.push(cleanup)
+        }
+    })
+
+    onUnmounted(() => {
+        cleanups.forEach(fn => fn())
+    })
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
